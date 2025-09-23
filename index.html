@@ -367,15 +367,88 @@ function routeToNextStop() {
             document.getElementById('status').textContent = message;
         }
 
+        // Force create a test route if API isn't working
+        function forceCreateRoute() {
+            console.log("=== FORCE CREATE ROUTE ===");
+            
+            if (!userLocation) {
+                updateStatus("No user location. Please add ?lat=34.0522&lng=-118.2437 to URL");
+                return;
+            }
+            
+            const nextStop = stops[currentStopIndex];
+            
+            // Create a fake route object for testing
+            currentRoute = {
+                routes: [{
+                    legs: [{
+                        distance: { text: "5.2 mi", value: 8369 },
+                        duration: { text: "12 mins", value: 720 },
+                        steps: [
+                            {
+                                instructions: "Head north on your current street",
+                                distance: { text: "0.3 mi", value: 482 },
+                                duration: { text: "1 min", value: 60 }
+                            },
+                            {
+                                instructions: "Turn right onto Hollywood Blvd",
+                                distance: { text: "2.1 mi", value: 3379 },
+                                duration: { text: "5 mins", value: 300 }
+                            },
+                            {
+                                instructions: "Continue straight to reach Hollywood Sign",
+                                distance: { text: "2.8 mi", value: 4506 },
+                                duration: { text: "6 mins", value: 360 }
+                            }
+                        ]
+                    }]
+                }]
+            };
+            
+            console.log("Fake route created:", currentRoute);
+            
+            // Enable navigation button
+            document.getElementById('nav-button').disabled = false;
+            
+            updateStatus(`✅ Test route created to ${nextStop.name}! Now try 'Start Navigation'`);
+            
+            // Update destination info
+            document.getElementById('destination-info').innerHTML = `
+                <strong>Next Stop:</strong> ${nextStop.name} (TEST ROUTE)<br>
+                <strong>Distance:</strong> 5.2 mi<br>
+                <strong>Duration:</strong> 12 mins<br>
+                <em>This is a test route. Click "Start Navigation"</em>
+            `;
+        }
+
         // Test function to debug navigation issues
         function testNavigation() {
-            console.log("Testing navigation...");
+            console.log("=== TEST NAVIGATION DEBUG ===");
             console.log("userLocation:", userLocation);
             console.log("currentRoute:", currentRoute);
+            console.log("currentStopIndex:", currentStopIndex);
+            console.log("stops.length:", stops.length);
             console.log("isNavigating:", isNavigating);
             
+            // Show detailed info
+            let debugInfo = `
+DEBUG INFO:
+- User Location: ${userLocation ? `${userLocation.lat}, ${userLocation.lng}` : 'NULL'}
+- Current Route: ${currentRoute ? 'EXISTS' : 'NULL'}
+- Current Stop: ${currentStopIndex}/${stops.length}
+- Navigation Active: ${isNavigating}
+            `;
+            
+            if (currentRoute) {
+                const steps = currentRoute.routes[0].legs[0].steps;
+                debugInfo += `\n- Route Steps: ${steps.length}`;
+                debugInfo += `\n- First Step: ${steps[0] ? steps[0].instructions.replace(/<[^>]*>/g, '') : 'N/A'}`;
+            }
+            
+            alert(debugInfo);
+            
             if (!currentRoute) {
-                alert("No route available. Click 'Show Route to Next Stop' first.");
+                updateStatus("❌ No route found. Open browser console (F12) and try 'Show Route' again.");
                 return;
             }
             
@@ -392,7 +465,7 @@ function routeToNextStop() {
                 document.getElementById('total-remaining').textContent = "Test mode";
                 document.getElementById('next-instruction').textContent = "This is a test of the navigation panel";
                 
-                updateStatus("Test navigation panel shown. If you can see this, the navigation should work!");
+                updateStatus("✅ Test navigation panel shown successfully!");
             }
         }
 
