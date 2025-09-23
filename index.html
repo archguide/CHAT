@@ -163,9 +163,11 @@
                 userLocation = { lat: lat, lng: lng };
                 mapCenter = userLocation;
                 updateStatus(`Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                console.log("📍 Initial location from URL:", userLocation);
             } else {
-                updateStatus("No location in URL - using default");
-                userLocation = mapCenter; // Use default location
+                updateStatus("No location in URL - will try geolocation");
+                userLocation = mapCenter; // Use default location as fallback
+                console.log("📍 Using default location:", userLocation);
             }
 
             // Initialize map
@@ -250,41 +252,60 @@
 
         // Continuous location tracking (WebView handles this automatically)
         function startContinuousLocationTracking() {
+            console.log("🔄 Starting location tracking...");
+            
             if (!navigator.geolocation) {
-                console.log("Geolocation not available");
+                console.log("❌ Geolocation not available");
+                updateStatus("Geolocation not supported");
                 return;
             }
             
-            // Update location every 5 seconds
+            // First, try to get current location immediately
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    console.log("📍 Initial location obtained:", position.coords.latitude, position.coords.longitude);
+                    handleLocationUpdate(position.coords.latitude, position.coords.longitude);
+                    
+                    // Now start continuous tracking
+                    startLocationWatching();
+                },
+                (error) => {
+                    console.error("❌ Initial location error:", error);
+                    updateStatus(`Location error: ${error.message}`);
+                    
+                    // Still try to start watching in case it works later
+                    startLocationWatching();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 5000
+                }
+            );
+        }
+
+        // Start continuous location watching
+        function startLocationWatching() {
+            // Update location every 2 seconds (since Draftbit updates every 1 second)
             const trackLocation = () => {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
-                        const newLocation = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude
-                        };
+                        const newLat = position.coords.latitude;
+                        const newLng = position.coords.longitude;
                         
-                        // Only update if location changed significantly (>5 meters)
-                        if (userLocation) {
-                            const distance = calculateDistance(
-                                userLocation.lat, userLocation.lng,
-                                newLocation.lat, newLocation.lng
-                            );
-                            
-                            if (distance > 0.005) { // 5 meters
-                                handleLocationUpdate(newLocation.lat, newLocation.lng);
-                            }
-                        } else {
-                            handleLocationUpdate(newLocation.lat, newLocation.lng);
-                        }
+                        console.log("📍 Location update:", newLat, newLng);
+                        
+                        // Always update location (no distance check for better tracking)
+                        handleLocationUpdate(newLat, newLng);
                     },
                     (error) => {
-                        console.log("Location tracking error:", error.message);
+                        console.log("⚠️ Location tracking error:", error.message);
+                        // Don't update status too frequently for errors
                     },
                     {
                         enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 10000
+                        timeout: 8000,
+                        maximumAge: 2000
                     }
                 );
             };
@@ -292,10 +313,10 @@
             // Initial location
             trackLocation();
             
-            // Track every 5 seconds
-            setInterval(trackLocation, 5000);
+            // Track every 2 seconds
+            setInterval(trackLocation, 2000);
             
-            console.log("✅ Continuous location tracking started");
+            console.log("✅ Location watching started (every 2 seconds)");
         }
 
         // Create test tour data if Google Sheets fails
@@ -539,33 +560,55 @@
 
         // Handle location updates
         function handleLocationUpdate(lat, lng) {
+            console.log("📍 Updating location:", lat, lng);
+            
             const newLocation = { lat: lat, lng: lng };
             userLocation = newLocation;
             
+            // Always update user marker
             updateUserMarker();
             
+            // Update map center during navigation
             if (isNavigating) {
                 map.panTo(userLocation);
                 if (currentRoute) {
                     checkNavigationProgress();
                 }
             }
+            
+            // Update status (show location for debugging)
+            if (!isNavigating) {
+                updateStatus(`📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            }
         }
 
         // Apple Maps style location dot (no white center dot)
         function updateUserMarker() {
+            console.log("🔵 Creating/updating user location marker at:", userLocation);
+            
+            // Remove existing marker
             if (userMarker) {
                 userMarker.setMap(null);
+                userMarker = null;
             }
             
+            if (!userLocation) {
+                console.log("❌ No user location to show marker");
+                return;
+            }
+            
+            // Create new marker
             userMarker = new google.maps.Marker({
                 position: userLocation,
                 map: map,
                 title: "Your Location",
+                zIndex: 1000, // Make sure it appears above other markers
                 icon: {
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
                         <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+                            <!-- White border ring -->
+                            <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+                            <!-- Blue location dot -->
                             <circle cx="12" cy="12" r="8" fill="#007AFF"/>
                         </svg>
                     `),
@@ -573,6 +616,8 @@
                     anchor: new google.maps.Point(12, 12)
                 }
             });
+            
+            console.log("✅ User marker created successfully");
         }
 
         // Start navigation
