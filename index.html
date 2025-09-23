@@ -1,4 +1,8 @@
-<!DOCTYPE html>
+function routeToNextStop() {
+            if (!userLocation) {
+                updateStatus("No location available. Please add ?lat=34.0522&lng=-118.2437 to the URL");
+                return;
+            }<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -37,9 +41,11 @@
 </head>
 <body>
     <div id="controls">
-        <button onclick="routeToNextStop()">Route to Next Stop</button>
+        <button onclick="routeToNextStop()">Show Route to Next Stop</button>
+        <button onclick="startNavigation()">Start Navigation</button>
         <button onclick="goToNextStop()">Next Destination</button>
         <div id="status">Loading...</div>
+        <div id="destination-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
     </div>
     <div id="map"></div>
 
@@ -50,12 +56,13 @@
         let userLocation = null;
         let currentStopIndex = 0;
         
-        // Define your stops here
+        // Define your stops here - Los Angeles landmarks
         const stops = [
-            { name: "Golden Gate Park", lat: 37.7694, lng: -122.4862 },
-            { name: "Pier 39", lat: 37.8087, lng: -122.4098 },
-            { name: "Lombard Street", lat: 37.8022, lng: -122.4188 },
-            { name: "Union Square", lat: 37.7880, lng: -122.4074 }
+            { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215 },
+            { name: "Santa Monica Pier", lat: 34.0092, lng: -118.4987 },
+            { name: "Griffith Observatory", lat: 34.1184, lng: -118.3004 },
+            { name: "Venice Beach", lat: 34.0195, lng: -118.4912 },
+            { name: "Downtown LA", lat: 34.0522, lng: -118.2437 }
         ];
 
         function initMap() {
@@ -64,8 +71,8 @@
             const lat = parseFloat(urlParams.get('lat'));
             const lng = parseFloat(urlParams.get('lng'));
             
-            // Default center (San Francisco)
-            let mapCenter = { lat: 37.7749, lng: -122.4194 };
+            // Default center (Los Angeles)
+            let mapCenter = { lat: 34.0522, lng: -118.2437 };
             
             // Check if valid coordinates provided in URL
             if (!isNaN(lat) && !isNaN(lng)) {
@@ -73,7 +80,7 @@
                 mapCenter = userLocation;
                 updateStatus(`Location loaded: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
             } else {
-                updateStatus("No location provided in URL. Add ?lat=37.7749&lng=-122.4194 to URL");
+                updateStatus("No location provided in URL. Add ?lat=34.0522&lng=-118.2437 to URL");
             }
 
             // Initialize map
@@ -295,6 +302,7 @@
             currentStopIndex++;
             if (currentStopIndex >= stops.length) {
                 updateStatus("Tour complete! You've visited all stops.");
+                document.getElementById('destination-info').innerHTML = '<strong>🎉 Congratulations! Tour completed!</strong>';
                 return;
             }
             routeToNextStop();
@@ -365,7 +373,7 @@
         }
     </script>
 
-    <!-- Replace YOUR_API_KEY with your actual Google Maps API key -->
+    <!-- Google Maps API with your key -->
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDdD8BAz34j_0zv-G3qJKTP5sKQn7PQ1w&callback=initMap">
     </script>
