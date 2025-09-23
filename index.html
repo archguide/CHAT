@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LA Navigation - Tours</title>
+    <title>LA Navigation</title>
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         #map { height: 100vh; width: 100%; }
@@ -88,25 +88,10 @@
             color: white;
             text-align: center;
         }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 20px 30px;
-            border-radius: 20px;
-            font-size: 16px;
-            z-index: 2000;
-        }
     </style>
 </head>
 <body>
-    <!-- Loading indicator -->
-    <div id="loading">Loading tour data...</div>
-
-    <!-- Navigation panel at top (Apple Maps style) -->
+    <!-- Navigation panel at top -->
     <div id="navigation-panel">
         <div id="current-instruction">Turn left onto Main Street</div>
         <div id="distance-time">
@@ -117,7 +102,7 @@
         <button onclick="stopNavigation()" class="stop-button">End Navigation</button>
     </div>
 
-    <!-- Simple start button for testing -->
+    <!-- Simple start button -->
     <div id="controls">
         <button onclick="startInAppNavigation()" id="nav-button" disabled>🧭 Start Navigation</button>
         <div id="status">Loading...</div>
@@ -130,30 +115,20 @@
         let directionsService;
         let directionsRenderer;
         let userLocation = null;
-        let currentStopIndex = 0;
         let isNavigating = false;
         let currentRoute = null;
         let currentStepIndex = 0;
         let userMarker = null;
+        let destinationMarker = null;
         
-        // Tour data loaded from Google Sheets
-        let tourStops = [];
-        let tourInfo = {};
-        
-        // Google Sheets configuration
-        const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/pub?output=csv";
+        // Simple destination - Hollywood Sign
+        const destination = { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215 };
 
-        async function initMap() {
-            // Get URL parameters
+        function initMap() {
+            // Get location from URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const lat = parseFloat(urlParams.get('lat'));
             const lng = parseFloat(urlParams.get('lng'));
-            const tourId = urlParams.get('tour') || 'hollywood'; // Default tour
-            const stopIndex = parseInt(urlParams.get('stop')) || 0;
-            const autoStart = urlParams.get('auto') === 'true'; // Simple auto parameter
-            
-            // Set current stop index
-            currentStopIndex = stopIndex;
             
             // Default center (Los Angeles)
             let mapCenter = { lat: 34.0522, lng: -118.2437 };
@@ -162,28 +137,19 @@
             if (!isNaN(lat) && !isNaN(lng)) {
                 userLocation = { lat: lat, lng: lng };
                 mapCenter = userLocation;
-                updateStatus(`Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-                console.log("📍 Initial location from URL:", userLocation);
+                updateStatus(`📍 ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
             } else {
-                updateStatus("No location in URL - will try geolocation");
-                userLocation = mapCenter; // Use default location as fallback
-                console.log("📍 Using default location:", userLocation);
+                updateStatus("No location provided");
+                userLocation = mapCenter; // Use default
             }
 
             // Initialize map
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 16,
+                zoom: 14,
                 center: mapCenter,
                 mapTypeControl: false,
                 streetViewControl: false,
-                fullscreenControl: false,
-                styles: [
-                    {
-                        featureType: "poi",
-                        elementType: "labels",
-                        stylers: [{ visibility: "off" }]
-                    }
-                ]
+                fullscreenControl: false
             });
 
             // Initialize directions service and renderer
@@ -191,7 +157,7 @@
             directionsRenderer = new google.maps.DirectionsRenderer({
                 draggable: false,
                 panel: null,
-                suppressMarkers: true, // Hide default markers, we'll use custom ones
+                suppressMarkers: true,
                 polylineOptions: {
                     strokeColor: '#007AFF',
                     strokeWeight: 6,
@@ -200,415 +166,76 @@
             });
             directionsRenderer.setMap(map);
 
-            // Load tour data from Google Sheets
-            try {
-                await loadTourData(tourId);
-                
-                // Add user location marker
-                updateUserMarker();
+            // Add user location marker
+            updateUserMarker();
+            
+            // Add destination marker
+            addDestinationMarker();
 
-                // Add markers for tour stops
-                addTourMarkers();
+            // Start location tracking
+            startLocationTracking();
 
-                // Start continuous location tracking (WebView handles this)
-                startContinuousLocationTracking();
-
-                // Create route to current stop
-                if (tourStops.length > 0) {
-                    await createRouteToCurrentStop();
-                    
-                    // Auto-start navigation if requested
-                    if (autoStart) {
-                        updateStatus("Auto-starting navigation...");
-                        setTimeout(() => {
-                            startInAppNavigation();
-                        }, 2000);
-                    } else {
-                        // Show start button
-                        document.getElementById('nav-button').disabled = false;
-                    }
-                }
-                
-                // Hide loading indicator
-                document.getElementById('loading').style.display = 'none';
-                
-            } catch (error) {
-                console.error('Error loading tour data:', error);
-                updateStatus('Error loading tour data');
-                document.getElementById('loading').textContent = 'Error loading tour data. Using test data.';
-                
-                // Fallback to test data if sheets fail
-                createTestTourData(tourId);
-                addTourMarkers(); // This will now show only current destination
-                await createTestRoute();
-                
-                if (autoStart) {
-                    setTimeout(() => startInAppNavigation(), 2000);
-                }
-                
-                document.getElementById('loading').style.display = 'none';
-            }
+            // Create route
+            createRoute();
         }
 
-        // Continuous location tracking (WebView handles this automatically)
-        function startContinuousLocationTracking() {
-            console.log("🔄 Starting location tracking...");
-            
+        // Simple location tracking
+        function startLocationTracking() {
             if (!navigator.geolocation) {
-                console.log("❌ Geolocation not available");
-                updateStatus("Geolocation not supported");
+                console.log("Geolocation not available");
                 return;
             }
             
-            // First, try to get current location immediately
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    console.log("📍 Initial location obtained:", position.coords.latitude, position.coords.longitude);
-                    handleLocationUpdate(position.coords.latitude, position.coords.longitude);
-                    
-                    // Now start continuous tracking
-                    startLocationWatching();
-                },
-                (error) => {
-                    console.error("❌ Initial location error:", error);
-                    updateStatus(`Location error: ${error.message}`);
-                    
-                    // Still try to start watching in case it works later
-                    startLocationWatching();
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 5000
-                }
-            );
-        }
-
-        // Start continuous location watching
-        function startLocationWatching() {
-            // Update location every 2 seconds (since Draftbit updates every 1 second)
             const trackLocation = () => {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const newLat = position.coords.latitude;
                         const newLng = position.coords.longitude;
                         
-                        console.log("📍 Location update:", newLat, newLng);
+                        userLocation = { lat: newLat, lng: newLng };
+                        updateUserMarker();
                         
-                        // Always update location (no distance check for better tracking)
-                        handleLocationUpdate(newLat, newLng);
+                        if (isNavigating) {
+                            map.panTo(userLocation);
+                            checkNavigationProgress();
+                        }
+                        
+                        if (!isNavigating) {
+                            updateStatus(`📍 ${newLat.toFixed(6)}, ${newLng.toFixed(6)}`);
+                        }
                     },
                     (error) => {
-                        console.log("⚠️ Location tracking error:", error.message);
-                        // Don't update status too frequently for errors
+                        console.log("Location error:", error.message);
                     },
                     {
                         enableHighAccuracy: true,
-                        timeout: 8000,
-                        maximumAge: 2000
+                        timeout: 10000,
+                        maximumAge: 3000
                     }
                 );
             };
             
-            // Initial location
             trackLocation();
-            
-            // Track every 2 seconds
             setInterval(trackLocation, 2000);
-            
-            console.log("✅ Location watching started (every 2 seconds)");
         }
 
-        // Create test tour data if Google Sheets fails
-        function createTestTourData(tourId) {
-            console.log("Creating test tour data for:", tourId);
-            
-            const testTours = {
-                hollywood: {
-                    name: "Hollywood Tour",
-                    stops: [
-                        { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215, description: "Iconic landmark" },
-                        { name: "Walk of Fame", lat: 34.1016, lng: -118.3416, description: "Celebrity stars" },
-                        { name: "TCL Theatre", lat: 34.1022, lng: -118.3406, description: "Movie premieres" }
-                    ]
-                },
-                beaches: {
-                    name: "LA Beaches Tour",
-                    stops: [
-                        { name: "Santa Monica Pier", lat: 34.0092, lng: -118.4987, description: "Amusement pier" },
-                        { name: "Venice Beach", lat: 34.0195, lng: -118.4912, description: "Boardwalk" },
-                        { name: "Manhattan Beach", lat: 33.8847, lng: -118.4109, description: "Upscale beach" }
-                    ]
-                },
-                downtown: {
-                    name: "Downtown LA Tour",
-                    stops: [
-                        { name: "Disney Concert Hall", lat: 34.0555, lng: -118.2496, description: "Architecture" },
-                        { name: "Grand Central Market", lat: 34.0506, lng: -118.2496, description: "Food hall" },
-                        { name: "LA City Hall", lat: 34.0522, lng: -118.2437, description: "Government" }
-                    ]
-                }
-            };
-            
-            const selectedTour = testTours[tourId] || testTours.hollywood;
-            
-            tourStops = selectedTour.stops;
-            tourInfo = {
-                id: tourId,
-                name: selectedTour.name,
-                totalStops: selectedTour.stops.length
-            };
-            
-            console.log("Test tour created:", tourInfo);
-            updateStatus(`${tourInfo.name} loaded (test data)`);
-        }
-
-        // Create test route (bypass Google Directions API)
-        async function createTestRoute() {
-            return new Promise((resolve) => {
-                console.log("Creating test route...");
-                
-                if (!userLocation || currentStopIndex >= tourStops.length) {
-                    console.log("No user location or invalid stop index");
-                    resolve();
-                    return;
-                }
-                
-                const currentStop = tourStops[currentStopIndex];
-                console.log("Creating route to:", currentStop.name);
-                
-                // Create fake route with realistic directions
-                currentRoute = {
-                    routes: [{
-                        legs: [{
-                            distance: { text: "2.5 mi", value: 4023 },
-                            duration: { text: "8 mins", value: 480 },
-                            steps: [
-                                {
-                                    instructions: `Head toward <b>${currentStop.name}</b>`,
-                                    distance: { text: "0.5 mi", value: 804 },
-                                    duration: { text: "2 min", value: 120 },
-                                    end_location: { 
-                                        lat: userLocation.lat + (currentStop.lat - userLocation.lat) * 0.3, 
-                                        lng: userLocation.lng + (currentStop.lng - userLocation.lng) * 0.3
-                                    }
-                                },
-                                {
-                                    instructions: "Continue straight for 1.2 miles",
-                                    distance: { text: "1.2 mi", value: 1931 },
-                                    duration: { text: "4 min", value: 240 },
-                                    end_location: { 
-                                        lat: userLocation.lat + (currentStop.lat - userLocation.lat) * 0.7, 
-                                        lng: userLocation.lng + (currentStop.lng - userLocation.lng) * 0.7
-                                    }
-                                },
-                                {
-                                    instructions: `Arrive at <b>${currentStop.name}</b>`,
-                                    distance: { text: "0.8 mi", value: 1288 },
-                                    duration: { text: "2 min", value: 120 },
-                                    end_location: { 
-                                        lat: currentStop.lat, 
-                                        lng: currentStop.lng 
-                                    }
-                                }
-                            ]
-                        }]
-                    }]
-                };
-                
-                console.log("✅ Test route created successfully");
-                updateStatus(`Ready - Route to ${currentStop.name} (2.5 mi, 8 mins)`);
-                document.getElementById('nav-button').disabled = false;
-                resolve(currentRoute);
-            });
-        }
-
-        // Load tour data from Google Sheets
-        async function loadTourData(tourId) {
-            updateStatus('Loading tour data from Google Sheets...');
-            
-            // Skip Google Sheets for testing - just throw error to use test data
-            throw new Error("Using test data for development");
-            
-            /* Uncomment this section when you have Google Sheets URL set up:
-            
-            try {
-                const response = await fetch(GOOGLE_SHEETS_URL);
-                const csvText = await response.text();
-                
-                // Parse CSV data
-                const lines = csvText.split('\n');
-                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-                
-                const allTours = [];
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-                    if (values.length >= headers.length && values[0]) {
-                        const tour = {};
-                        headers.forEach((header, index) => {
-                            tour[header] = values[index];
-                        });
-                        allTours.push(tour);
-                    }
-                }
-                
-                // Filter stops for current tour
-                tourStops = allTours
-                    .filter(stop => stop.tour_id === tourId)
-                    .sort((a, b) => parseInt(a.stop_number) - parseInt(b.stop_number))
-                    .map(stop => ({
-                        name: stop.stop_name,
-                        lat: parseFloat(stop.latitude),
-                        lng: parseFloat(stop.longitude),
-                        description: stop.description
-                    }));
-                
-                // Set tour info
-                const firstStop = allTours.find(stop => stop.tour_id === tourId);
-                if (firstStop) {
-                    tourInfo = {
-                        id: tourId,
-                        name: firstStop.tour_name,
-                        totalStops: tourStops.length
-                    };
-                }
-                
-                console.log(`Loaded ${tourStops.length} stops for ${tourInfo.name}`);
-                updateStatus(`${tourInfo.name} loaded from Google Sheets`);
-                
-            } catch (error) {
-                console.error('Error fetching tour data:', error);
-                throw error;
-            }
-            
-            */
-        }
-
-        // Add marker for current destination only (Apple Maps style)
-        function addTourMarkers() {
-            // Clear any existing destination marker
-            if (window.destinationMarker) {
-                window.destinationMarker.setMap(null);
-            }
-            
-            // Only show marker for current destination
-            if (currentStopIndex < tourStops.length) {
-                const currentStop = tourStops[currentStopIndex];
-                
-                window.destinationMarker = new google.maps.Marker({
-                    position: { lat: currentStop.lat, lng: currentStop.lng },
-                    map: map,
-                    title: currentStop.name,
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
-                                <!-- Pin shadow -->
-                                <ellipse cx="16" cy="38" rx="8" ry="2" fill="rgba(0,0,0,0.2)"/>
-                                <!-- Pin body -->
-                                <path d="M16 0C7.2 0 0 7.2 0 16c0 8.8 16 24 16 24s16-15.2 16-24C32 7.2 24.8 0 16 0z" fill="#FF3B30"/>
-                                <!-- White circle for number -->
-                                <circle cx="16" cy="16" r="10" fill="white"/>
-                                <!-- Number -->
-                                <text x="16" y="21" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600" fill="#FF3B30">${currentStopIndex + 1}</text>
-                            </svg>
-                        `),
-                        scaledSize: new google.maps.Size(32, 40),
-                        anchor: new google.maps.Point(16, 40)
-                    }
-                });
-            }
-        }
-
-        // Create route to current stop
-        async function createRouteToCurrentStop() {
-            if (!userLocation || currentStopIndex >= tourStops.length) {
-                return;
-            }
-            
-            const currentStop = tourStops[currentStopIndex];
-            updateStatus(`Getting route to ${currentStop.name}...`);
-            
-            const request = {
-                origin: userLocation,
-                destination: { lat: currentStop.lat, lng: currentStop.lng },
-                travelMode: google.maps.TravelMode.DRIVING,
-                avoidTolls: false,
-                avoidHighways: false
-            };
-            
-            return new Promise((resolve, reject) => {
-                directionsService.route(request, (result, status) => {
-                    if (status === 'OK') {
-                        currentRoute = result;
-                        // Don't show the route immediately - wait for navigation to start
-                        
-                        const route = result.routes[0];
-                        const leg = route.legs[0];
-                        
-                        updateStatus(`Route: ${leg.distance.text}, ${leg.duration.text}`);
-                        document.getElementById('nav-button').disabled = false;
-                        
-                        resolve(result);
-                    } else {
-                        console.error('Google Directions failed, using test route:', status);
-                        // Fallback to test route if Google API fails
-                        createTestRoute().then(resolve).catch(reject);
-                    }
-                });
-            });
-        }
-
-        // Handle location updates
-        function handleLocationUpdate(lat, lng) {
-            console.log("📍 Updating location:", lat, lng);
-            
-            const newLocation = { lat: lat, lng: lng };
-            userLocation = newLocation;
-            
-            // Always update user marker
-            updateUserMarker();
-            
-            // Update map center during navigation
-            if (isNavigating) {
-                map.panTo(userLocation);
-                if (currentRoute) {
-                    checkNavigationProgress();
-                }
-            }
-            
-            // Update status (show location for debugging)
-            if (!isNavigating) {
-                updateStatus(`📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-            }
-        }
-
-        // Apple Maps style location dot (no white center dot)
+        // Update user location marker
         function updateUserMarker() {
-            console.log("🔵 Creating/updating user location marker at:", userLocation);
-            
-            // Remove existing marker
             if (userMarker) {
                 userMarker.setMap(null);
-                userMarker = null;
             }
             
-            if (!userLocation) {
-                console.log("❌ No user location to show marker");
-                return;
-            }
+            if (!userLocation) return;
             
-            // Create new marker
             userMarker = new google.maps.Marker({
                 position: userLocation,
                 map: map,
                 title: "Your Location",
-                zIndex: 1000, // Make sure it appears above other markers
+                zIndex: 1000,
                 icon: {
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
                         <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <!-- White border ring -->
                             <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
-                            <!-- Blue location dot -->
                             <circle cx="12" cy="12" r="8" fill="#007AFF"/>
                         </svg>
                     `),
@@ -616,16 +243,148 @@
                     anchor: new google.maps.Point(12, 12)
                 }
             });
+        }
+
+        // Add destination marker
+        function addDestinationMarker() {
+            destinationMarker = new google.maps.Marker({
+                position: { lat: destination.lat, lng: destination.lng },
+                map: map,
+                title: destination.name,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="16" cy="38" rx="8" ry="2" fill="rgba(0,0,0,0.2)"/>
+                            <path d="M16 0C7.2 0 0 7.2 0 16c0 8.8 16 24 16 24s16-15.2 16-24C32 7.2 24.8 0 16 0z" fill="#FF3B30"/>
+                            <circle cx="16" cy="16" r="10" fill="white"/>
+                            <text x="16" y="21" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600" fill="#FF3B30">1</text>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(32, 40),
+                    anchor: new google.maps.Point(16, 40)
+                }
+            });
+        }
+
+        // Create route with realistic directions
+        function createRoute() {
+            if (!userLocation) {
+                setTimeout(createRoute, 1000);
+                return;
+            }
             
-            console.log("✅ User marker created successfully");
+            updateStatus("Getting directions...");
+            
+            const request = {
+                origin: userLocation,
+                destination: { lat: destination.lat, lng: destination.lng },
+                travelMode: google.maps.TravelMode.DRIVING,
+                avoidTolls: false,
+                avoidHighways: false
+            };
+            
+            directionsService.route(request, (result, status) => {
+                if (status === 'OK') {
+                    currentRoute = result;
+                    
+                    const route = result.routes[0];
+                    const leg = route.legs[0];
+                    
+                    updateStatus(`Route ready: ${leg.distance.text}, ${leg.duration.text}`);
+                    document.getElementById('nav-button').disabled = false;
+                } else {
+                    console.error('Directions failed:', status);
+                    createTestRoute();
+                }
+            });
+        }
+
+        // Fallback test route with realistic LA street names
+        function createTestRoute() {
+            if (!userLocation) return;
+            
+            // Create realistic LA directions
+            currentRoute = {
+                routes: [{
+                    legs: [{
+                        distance: { text: "8.2 mi", value: 13193 },
+                        duration: { text: "18 mins", value: 1080 },
+                        steps: [
+                            {
+                                instructions: "Head <b>north</b> on <b>S Figueroa St</b> toward <b>W 7th St</b>",
+                                distance: { text: "0.4 mi", value: 644 },
+                                duration: { text: "2 mins", value: 120 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.002, 
+                                    lng: userLocation.lng 
+                                }
+                            },
+                            {
+                                instructions: "Turn <b>right</b> onto <b>US-101 N</b>",
+                                distance: { text: "4.8 mi", value: 7724 },
+                                duration: { text: "8 mins", value: 480 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.01, 
+                                    lng: userLocation.lng + 0.005
+                                }
+                            },
+                            {
+                                instructions: "Take exit <b>2B</b> for <b>Gower St</b> toward <b>Hollywood</b>",
+                                distance: { text: "0.3 mi", value: 483 },
+                                duration: { text: "1 min", value: 60 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.015, 
+                                    lng: userLocation.lng + 0.008
+                                }
+                            },
+                            {
+                                instructions: "Turn <b>left</b> onto <b>Franklin Ave</b>",
+                                distance: { text: "1.2 mi", value: 1931 },
+                                duration: { text: "4 mins", value: 240 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.02, 
+                                    lng: userLocation.lng + 0.015
+                                }
+                            },
+                            {
+                                instructions: "Turn <b>right</b> onto <b>Beachwood Dr</b>",
+                                distance: { text: "0.8 mi", value: 1287 },
+                                duration: { text: "2 mins", value: 120 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.025, 
+                                    lng: userLocation.lng + 0.018
+                                }
+                            },
+                            {
+                                instructions: "Continue onto <b>Ledgewood Dr</b>",
+                                distance: { text: "0.5 mi", value: 805 },
+                                duration: { text: "1 min", value: 60 },
+                                end_location: { 
+                                    lat: destination.lat, 
+                                    lng: destination.lng 
+                                }
+                            },
+                            {
+                                instructions: "Arrive at <b>Hollywood Sign</b> on the right",
+                                distance: { text: "0.2 mi", value: 322 },
+                                duration: { text: "1 min", value: 60 },
+                                end_location: { 
+                                    lat: destination.lat, 
+                                    lng: destination.lng 
+                                }
+                            }
+                        ]
+                    }]
+                }]
+            };
+            
+            updateStatus(`Test route ready: 8.2 mi, 18 mins`);
+            document.getElementById('nav-button').disabled = false;
         }
 
         // Start navigation
         function startInAppNavigation() {
-            if (!currentRoute) {
-                updateStatus("No route available");
-                return;
-            }
+            if (!currentRoute) return;
 
             isNavigating = true;
             currentStepIndex = 0;
@@ -633,7 +392,7 @@
             document.getElementById('controls').style.display = 'none';
             document.getElementById('navigation-panel').style.display = 'block';
             
-            // Show the route polyline during navigation
+            // Show route line
             directionsRenderer.setDirections(currentRoute);
             
             if (userLocation) {
@@ -644,7 +403,48 @@
             updateNavigationPanel();
         }
 
-        // Check navigation progress
+        // Update navigation panel with current instruction
+        function updateNavigationPanel() {
+            if (!currentRoute || !isNavigating) return;
+            
+            const steps = currentRoute.routes[0].legs[0].steps;
+            
+            if (currentStepIndex >= steps.length) {
+                document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
+                document.getElementById('distance-time').textContent = "Destination reached";
+                document.getElementById('next-instruction').textContent = `Welcome to ${destination.name}!`;
+                return;
+            }
+            
+            const currentStep = steps[currentStepIndex];
+            const nextStep = currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
+            
+            // Current instruction (remove HTML tags)
+            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
+            document.getElementById('current-instruction').textContent = instruction;
+            
+            // Distance and time for this step
+            document.getElementById('step-distance').textContent = currentStep.distance.text;
+            
+            // Calculate remaining time
+            let remainingDuration = 0;
+            for (let i = currentStepIndex; i < steps.length; i++) {
+                remainingDuration += steps[i].duration.value;
+            }
+            
+            const remainingTimeMinutes = Math.ceil(remainingDuration / 60);
+            document.getElementById('total-remaining').textContent = `${remainingTimeMinutes} min remaining`;
+            
+            // Next instruction
+            if (nextStep) {
+                const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
+                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction}`;
+            } else {
+                document.getElementById('next-instruction').textContent = `Then: Arrive at ${destination.name}`;
+            }
+        }
+
+        // Check if user has progressed to next step
         function checkNavigationProgress() {
             if (!currentRoute || !isNavigating || !userLocation) return;
             
@@ -668,52 +468,10 @@
                 stepEndLat, stepEndLng
             );
             
-            if (distance < 0.03) { // 30 meters
+            // If within 30 meters of step end, move to next step
+            if (distance < 0.03) {
                 currentStepIndex++;
                 updateNavigationPanel();
-            }
-        }
-
-        // Update navigation panel
-        function updateNavigationPanel() {
-            if (!currentRoute || !isNavigating) return;
-            
-            const steps = currentRoute.routes[0].legs[0].steps;
-            
-            if (currentStopIndex >= tourStops.length) {
-                document.getElementById('current-instruction').textContent = "🎉 Tour Complete!";
-                document.getElementById('distance-time').textContent = "All destinations reached";
-                document.getElementById('next-instruction').textContent = "Thank you for taking the tour!";
-                return;
-            }
-            
-            if (currentStepIndex >= steps.length) {
-                document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
-                document.getElementById('distance-time').textContent = `Stop ${currentStopIndex + 1}/${tourStops.length} reached`;
-                document.getElementById('next-instruction').textContent = `Destination: ${tourStops[currentStopIndex].name}`;
-                return;
-            }
-            
-            const currentStep = steps[currentStepIndex];
-            const nextStep = currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
-            
-            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-            document.getElementById('current-instruction').textContent = instruction;
-            document.getElementById('step-distance').textContent = currentStep.distance.text;
-            
-            let remainingDuration = 0;
-            for (let i = currentStepIndex; i < steps.length; i++) {
-                remainingDuration += steps[i].duration.value;
-            }
-            
-            const remainingTimeMinutes = Math.ceil(remainingDuration / 60);
-            document.getElementById('total-remaining').textContent = `${remainingTimeMinutes} min remaining`;
-            
-            if (nextStep) {
-                const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
-                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction}`;
-            } else {
-                document.getElementById('next-instruction').textContent = `Then: Arrive at ${tourStops[currentStopIndex].name}`;
             }
         }
 
@@ -726,7 +484,7 @@
             document.getElementById('controls').style.display = 'block';
             document.getElementById('nav-button').disabled = false;
             
-            // Hide the route polyline when navigation stops
+            // Hide route line
             directionsRenderer.setDirections({routes: []});
             
             if (userLocation) {
