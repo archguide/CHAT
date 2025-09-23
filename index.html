@@ -300,43 +300,61 @@
 
         // Create test tour data if Google Sheets fails
         function createTestTourData(tourId) {
+            console.log("Creating test tour data for:", tourId);
+            
             const testTours = {
-                hollywood: [
-                    { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215, description: "Iconic landmark" },
-                    { name: "Walk of Fame", lat: 34.1016, lng: -118.3416, description: "Celebrity stars" },
-                    { name: "TCL Theatre", lat: 34.1022, lng: -118.3406, description: "Movie premieres" }
-                ],
-                beaches: [
-                    { name: "Santa Monica Pier", lat: 34.0092, lng: -118.4987, description: "Amusement pier" },
-                    { name: "Venice Beach", lat: 34.0195, lng: -118.4912, description: "Boardwalk" },
-                    { name: "Manhattan Beach", lat: 33.8847, lng: -118.4109, description: "Upscale beach" }
-                ],
-                downtown: [
-                    { name: "Disney Concert Hall", lat: 34.0555, lng: -118.2496, description: "Architecture" },
-                    { name: "Grand Central Market", lat: 34.0506, lng: -118.2496, description: "Food hall" },
-                    { name: "LA City Hall", lat: 34.0522, lng: -118.2437, description: "Government" }
-                ]
+                hollywood: {
+                    name: "Hollywood Tour",
+                    stops: [
+                        { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215, description: "Iconic landmark" },
+                        { name: "Walk of Fame", lat: 34.1016, lng: -118.3416, description: "Celebrity stars" },
+                        { name: "TCL Theatre", lat: 34.1022, lng: -118.3406, description: "Movie premieres" }
+                    ]
+                },
+                beaches: {
+                    name: "LA Beaches Tour",
+                    stops: [
+                        { name: "Santa Monica Pier", lat: 34.0092, lng: -118.4987, description: "Amusement pier" },
+                        { name: "Venice Beach", lat: 34.0195, lng: -118.4912, description: "Boardwalk" },
+                        { name: "Manhattan Beach", lat: 33.8847, lng: -118.4109, description: "Upscale beach" }
+                    ]
+                },
+                downtown: {
+                    name: "Downtown LA Tour",
+                    stops: [
+                        { name: "Disney Concert Hall", lat: 34.0555, lng: -118.2496, description: "Architecture" },
+                        { name: "Grand Central Market", lat: 34.0506, lng: -118.2496, description: "Food hall" },
+                        { name: "LA City Hall", lat: 34.0522, lng: -118.2437, description: "Government" }
+                    ]
+                }
             };
             
-            tourStops = testTours[tourId] || testTours.hollywood;
+            const selectedTour = testTours[tourId] || testTours.hollywood;
+            
+            tourStops = selectedTour.stops;
             tourInfo = {
                 id: tourId,
-                name: `${tourId.charAt(0).toUpperCase()}${tourId.slice(1)} Tour`,
-                totalStops: tourStops.length
+                name: selectedTour.name,
+                totalStops: selectedTour.stops.length
             };
             
-            updateStatus(`Test ${tourInfo.name} loaded`);
+            console.log("Test tour created:", tourInfo);
+            updateStatus(`${tourInfo.name} loaded (test data)`);
         }
 
         // Create test route (bypass Google Directions API)
         async function createTestRoute() {
             return new Promise((resolve) => {
+                console.log("Creating test route...");
+                
                 if (!userLocation || currentStopIndex >= tourStops.length) {
+                    console.log("No user location or invalid stop index");
                     resolve();
                     return;
                 }
                 
                 const currentStop = tourStops[currentStopIndex];
+                console.log("Creating route to:", currentStop.name);
                 
                 // Create fake route with realistic directions
                 currentRoute = {
@@ -377,7 +395,8 @@
                     }]
                 };
                 
-                updateStatus(`Test route to ${currentStop.name} ready`);
+                console.log("✅ Test route created successfully");
+                updateStatus(`Ready - Route to ${currentStop.name} (2.5 mi, 8 mins)`);
                 document.getElementById('nav-button').disabled = false;
                 resolve(currentRoute);
             });
@@ -385,7 +404,12 @@
 
         // Load tour data from Google Sheets
         async function loadTourData(tourId) {
-            updateStatus('Loading tour data...');
+            updateStatus('Loading tour data from Google Sheets...');
+            
+            // Skip Google Sheets for testing - just throw error to use test data
+            throw new Error("Using test data for development");
+            
+            /* Uncomment this section when you have Google Sheets URL set up:
             
             try {
                 const response = await fetch(GOOGLE_SHEETS_URL);
@@ -429,12 +453,14 @@
                 }
                 
                 console.log(`Loaded ${tourStops.length} stops for ${tourInfo.name}`);
-                updateStatus(`${tourInfo.name} loaded`);
+                updateStatus(`${tourInfo.name} loaded from Google Sheets`);
                 
             } catch (error) {
                 console.error('Error fetching tour data:', error);
                 throw error;
             }
+            
+            */
         }
 
         // Add marker for current destination only (Apple Maps style)
