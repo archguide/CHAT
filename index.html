@@ -20,6 +20,37 @@ function routeToNextStop() {
             padding: 10px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            max-width: 300px;
+        }
+        #navigation-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: none;
+        }
+        #current-instruction {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #1976d2;
+        }
+        #distance-time {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        #next-instruction {
+            font-size: 12px;
+            color: #888;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 6px;
         }
         button {
             background: #4285f4;
@@ -32,20 +63,44 @@ function routeToNextStop() {
             width: 100%;
         }
         button:hover { background: #3367d6; }
+        button:disabled { 
+            background: #ccc; 
+            cursor: not-allowed; 
+        }
         #status {
             margin-top: 10px;
             font-size: 12px;
             color: #666;
         }
+        .nav-button {
+            background: #34a853;
+            font-size: 16px;
+            padding: 12px;
+        }
+        .nav-button:hover { background: #2d8f43; }
+        .stop-button {
+            background: #ea4335;
+        }
+        .stop-button:hover { background: #d33b2c; }
     </style>
 </head>
 <body>
     <div id="controls">
         <button onclick="routeToNextStop()">Show Route to Next Stop</button>
-        <button onclick="startNavigation()">Start Navigation</button>
+        <button onclick="startInAppNavigation()" class="nav-button" id="nav-button">Start Navigation</button>
         <button onclick="goToNextStop()">Next Destination</button>
         <div id="status">Loading...</div>
         <div id="destination-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+    </div>
+
+    <div id="navigation-panel">
+        <div id="current-instruction">Turn left onto Main Street</div>
+        <div id="distance-time">
+            <span id="step-distance">0.3 mi</span> • 
+            <span id="total-remaining">5 min remaining</span>
+        </div>
+        <div id="next-instruction">Then: Continue straight for 2.1 miles</div>
+        <button onclick="stopNavigation()" class="stop-button">Stop Navigation</button>
     </div>
     <div id="map"></div>
 
@@ -55,6 +110,11 @@ function routeToNextStop() {
         let directionsRenderer;
         let userLocation = null;
         let currentStopIndex = 0;
+        let isNavigating = false;
+        let currentRoute = null;
+        let currentStepIndex = 0;
+        let watchPositionId = null;
+        let userMarker = null;
         
         // Define your stops here - Los Angeles landmarks
         const stops = [
@@ -102,21 +162,7 @@ function routeToNextStop() {
 
             // Add user location marker if provided
             if (userLocation) {
-                new google.maps.Marker({
-                    position: userLocation,
-                    map: map,
-                    title: "Your Location",
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="10" r="8" fill="#34A853" stroke="white" stroke-width="2"/>
-                                <circle cx="10" cy="10" r="3" fill="white"/>
-                            </svg>
-                        `),
-                        scaledSize: new google.maps.Size(20, 20),
-                        anchor: new google.maps.Point(10, 10)
-                    }
-                });
+                updateUserMarker();
             }
 
             // Add markers for all stops
@@ -139,6 +185,9 @@ function routeToNextStop() {
                     }
                 });
             });
+
+            // Initially disable navigation button
+            document.getElementById('nav-button').disabled = true;
 
             // Auto-route to first stop if location provided
             if (userLocation) {
