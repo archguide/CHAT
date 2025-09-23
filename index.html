@@ -1,530 +1,690 @@
 <!DOCTYPE html>
-
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LA Navigation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        #map { height: 100vh; width: 100%; }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 25px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            backdrop-filter: blur(10px);
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Gothic A1', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #100c08;
         }
+        #map { height: 100vh; width: 100%; }
+        
+        #start-nav-button {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            z-index: 1000;
+            background: #046307ff;
+            color: #fafafa;
+            border: none;
+            padding: 16px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Gothic A1', sans-serif;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(4, 99, 7, 0.3);
+        }
+        #start-nav-button:hover { 
+            background: #035206;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 25px rgba(4, 99, 7, 0.4);
+        }
+        #start-nav-button:disabled { 
+            background: #ccc; 
+            cursor: not-allowed; 
+            transform: none;
+            box-shadow: none;
+        }
+
         #navigation-panel {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             z-index: 1000;
-            background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%);
-            padding: 50px 20px 20px 20px;
+            background: #FAFAFA;
+            color: #100c08;
+            max-height: 70px;
+            overflow: hidden;
             box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-            backdrop-filter: blur(10px);
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
+            transition: max-height 0.3s ease-in-out;
+            cursor: pointer;
         }
+        
+        #navigation-panel.expanded {
+            max-height: 400px;
+            cursor: default;
+        }
+
+        #current-nav-content {
+            padding: 20px 20px 16px 20px;
+        }
+
         #current-instruction {
-            font-size: 22px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #1976d2;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #100c08;
             line-height: 1.3;
         }
+        
         #distance-time {
-            font-size: 16px;
+            font-size: 14px;
             color: #666;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #next-instruction {
+            font-size: 12px;
+            color: #888;
+            font-weight: 400;
+        }
+
+        #all-directions {
+            padding: 0 20px 20px 20px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .direction-step {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(16, 12, 8, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .direction-step.current {
+            background: rgba(15, 82, 186, 0.1);
+            margin: 0 -20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+        }
+
+        .step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            background: #0f52ba;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-number.current {
+            background: #046307ff;
+        }
+
+        .step-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .step-distance {
+            font-size: 12px;
+            color: #666;
             font-weight: 500;
         }
-        #next-instruction {
-            font-size: 14px;
-            color: #888;
-            padding: 10px 15px;
-            background: rgba(245,245,245,0.8);
-            border-radius: 12px;
-            border-left: 4px solid #4285f4;
+
+        #bottom-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: #FAFAFA;
+            color: #100c08;
+            padding: 16px 20px;
+            box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        button {
-            background: #007AFF;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 20px;
-            cursor: pointer;
+
+        #arrival-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #arrival-time {
             font-size: 16px;
-            font-weight: 600;
-            box-shadow: 0 2px 10px rgba(0,122,255,0.3);
+            font-weight: 700;
+            color: #100c08;
         }
-        button:hover { 
-            background: #0056CC;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(0,122,255,0.4);
+
+        #remaining-stats {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
         }
-        button:disabled { 
-            background: #ccc; 
-            cursor: not-allowed; 
-            transform: none;
-            box-shadow: none;
-        }
-        .stop-button {
-            background: #FF3B30;
-            margin-top: 15px;
-            width: 100%;
-        }
-        .stop-button:hover { background: #D70015; }
-        #status {
+
+        #end-nav-button {
+            background: #046307ff;
+            color: #fafafa;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
             font-size: 14px;
-            color: white;
-            text-align: center;
+            font-weight: 600;
+            font-family: 'Gothic A1', sans-serif;
+        }
+
+        #end-nav-button:hover {
+            background: #035206;
+        }
+
+        .expand-indicator {
+            position: absolute;
+            bottom: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 4px;
+            background: rgba(16, 12, 8, 0.2);
+            border-radius: 2px;
         }
     </style>
 </head>
 <body>
-    <div id="controls">
-        <button onclick="forceCreateRoute()" id="nav-button">🧭 Start Navigation</button>
-        <div id="status">Loading...</div>
-    </div>
+    <button id="start-nav-button" onclick="forceCreateRoute()">Start Navigation</button>
 
-```
-<div id="map"></div>
+    <div id="map"></div>
 
-<script>
-    let map;
-    let directionsService;
-    let directionsRenderer;
-    let userLocation = null;
-    let isNavigating = false;
-    let currentRoute = null;
-    let currentStepIndex = 0;
-    let userMarker = null;
-    let destinationMarker = null;
-    
-    // Simple destination
-    const destination = { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215 };
-
-    function initMap() {
-        // Get location from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const lat = parseFloat(urlParams.get('lat'));
-        const lng = parseFloat(urlParams.get('lng'));
+    <script>
+        let map;
+        let directionsService;
+        let directionsRenderer;
+        let userLocation = null;
+        let isNavigating = false;
+        let currentRoute = null;
+        let currentStepIndex = 0;
+        let userMarker = null;
+        let destinationMarker = null;
+        let lastLocationUpdate = 0;
+        let routeSteps = [];
         
-        // Set user location
-        if (!isNaN(lat) && !isNaN(lng)) {
-            userLocation = { lat: lat, lng: lng };
-        } else {
-            userLocation = { lat: 34.0522, lng: -118.2437 }; // Default LA
-        }
+        // Simple destination
+        const destination = { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215 };
 
-        // Initialize map
-        map = new google.maps.Map(document.getElementById("map"), {
-            zoom: 14,
-            center: userLocation,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false
-        });
-
-        // Initialize directions
-        directionsService = new google.maps.DirectionsService();
-        directionsRenderer = new google.maps.DirectionsRenderer({
-            draggable: false,
-            panel: null,
-            suppressMarkers: true,
-            polylineOptions: {
-                strokeColor: '#007AFF',
-                strokeWeight: 6,
-                strokeOpacity: 0.9
-            }
-        });
-        directionsRenderer.setMap(map);
-
-        // Add markers
-        updateUserMarker();
-        addDestinationMarker();
-        
-        // Start location tracking
-        startLocationTracking();
-        
-        updateStatus(`📍 ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`);
-    }
-
-    function updateUserMarker() {
-        if (userMarker) {
-            userMarker.setMap(null);
-        }
-        
-        userMarker = new google.maps.Marker({
-            position: userLocation,
-            map: map,
-            title: "Your Location",
-            zIndex: 1000,
-            icon: {
-                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
-                        <circle cx="12" cy="12" r="8" fill="#007AFF"/>
-                    </svg>
-                `),
-                scaledSize: new google.maps.Size(24, 24),
-                anchor: new google.maps.Point(12, 12)
-            }
-        });
-    }
-
-    function addDestinationMarker() {
-        destinationMarker = new google.maps.Marker({
-            position: { lat: destination.lat, lng: destination.lng },
-            map: map,
-            title: destination.name,
-            icon: {
-                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
-                        <ellipse cx="16" cy="38" rx="8" ry="2" fill="rgba(0,0,0,0.2)"/>
-                        <path d="M16 0C7.2 0 0 7.2 0 16c0 8.8 16 24 16 24s16-15.2 16-24C32 7.2 24.8 0 16 0z" fill="#FF3B30"/>
-                        <circle cx="16" cy="16" r="10" fill="white"/>
-                        <text x="16" y="21" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600" fill="#FF3B30">1</text>
-                    </svg>
-                `),
-                scaledSize: new google.maps.Size(32, 40),
-                anchor: new google.maps.Point(16, 40)
-            }
-        });
-    }
-
-    function startLocationTracking() {
-        if (!navigator.geolocation) return;
-        
-        const trackLocation = () => {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    userLocation = { 
-                        lat: position.coords.latitude, 
-                        lng: position.coords.longitude 
-                    };
-                    updateUserMarker();
-                    
-                    // During navigation, keep map centered and check progress
-                    if (isNavigating) {
-                        map.panTo(userLocation);
-                        checkNavigationProgress(); // Check progress with every location update
-                        updateDistanceToNextTurn(); // Update countdown distance
-                    } else {
-                        updateStatus(`📍 ${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`);
-                    }
-                },
-                (error) => console.log("Location error:", error.message),
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 1000 } // More responsive for 0.5s updates
-            );
-        };
-        
-        trackLocation();
-        setInterval(trackLocation, 1000); // Track every second to complement Draftbit's 0.5s updates
-    }
-
-    // Simple route creation with polyline
-    function forceCreateRoute() {
-        updateStatus("Creating route...");
-        
-        // Try Google Directions first
-        const request = {
-            origin: userLocation,
-            destination: { lat: destination.lat, lng: destination.lng },
-            travelMode: google.maps.TravelMode.DRIVING
-        };
-        
-        directionsService.route(request, (result, status) => {
-            if (status === 'OK') {
-                currentRoute = result;
-                directionsRenderer.setDirections(result);
-                
-                const leg = result.routes[0].legs[0];
-                updateStatus(`Ready: ${leg.distance.text}, ${leg.duration.text}`);
-                
-                // Change button to start navigation
-                document.getElementById('nav-button').textContent = '🧭 Start Navigation';
-                document.getElementById('nav-button').onclick = startNavigation;
+        function initMap() {
+            // Get location from URL or default
+            const urlParams = new URLSearchParams(window.location.search);
+            const lat = parseFloat(urlParams.get('lat'));
+            const lng = parseFloat(urlParams.get('lng'));
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+                userLocation = { lat: lat, lng: lng };
             } else {
-                // Fallback to simple polyline
-                createSimpleRoute();
+                userLocation = { lat: 34.0522, lng: -118.2437 }; // Default LA
             }
-        });
-    }
 
-    function createSimpleRoute() {
-        // Create manual polyline
-        const routePath = [
-            userLocation,
-            { lat: userLocation.lat + (destination.lat - userLocation.lat) * 0.5, 
-              lng: userLocation.lng + (destination.lng - userLocation.lng) * 0.5 },
-            { lat: destination.lat, lng: destination.lng }
-        ];
+            // Initialize map
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 14,
+                center: userLocation,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: false,
+                styles: [
+                    {
+                        featureType: "poi",
+                        elementType: "labels",
+                        stylers: [{ visibility: "off" }]
+                    }
+                ]
+            });
 
-        new google.maps.Polyline({
-            path: routePath,
-            geodesic: true,
-            strokeColor: '#007AFF',
-            strokeOpacity: 0.9,
-            strokeWeight: 6,
-            map: map
-        });
-
-        updateStatus("Ready: Test route to Hollywood Sign");
-        document.getElementById('nav-button').textContent = '🧭 Start Navigation';
-        document.getElementById('nav-button').onclick = startNavigation;
-    }
-
-    function startNavigation() {
-        isNavigating = true;
-        currentStepIndex = 0;
-        
-        // Hide controls and create navigation panel
-        document.getElementById('controls').style.display = 'none';
-        createNavigationPanel();
-        
-        if (userLocation) {
-            map.setCenter(userLocation);
-            map.setZoom(18);
-        }
-        
-        // Start showing turn-by-turn directions if we have a real route
-        if (currentRoute && currentRoute.routes[0].legs[0].steps) {
-            updateNavigationPanel();
-            console.log("🧭 Navigation started with real directions");
-        } else {
-            // Simple navigation for manual route
-            document.getElementById('current-instruction').textContent = "Follow the blue line to Hollywood Sign";
-            document.getElementById('distance-time').textContent = "Navigate using the route shown";
-            document.getElementById('next-instruction').textContent = "Stay on the blue path to reach your destination";
-            console.log("🧭 Navigation started with simple directions");
-        }
-    }
-
-    // Create navigation panel dynamically
-    function createNavigationPanel() {
-        const navPanel = document.createElement('div');
-        navPanel.id = 'navigation-panel';
-        navPanel.innerHTML = `
-            <div id="current-instruction"></div>
-            <div id="distance-time">
-                <span id="step-distance"></span>
-                <span id="total-remaining"></span>
-            </div>
-            <div id="next-instruction"></div>
-            <button onclick="stopNavigation()" class="stop-button">End Navigation</button>
-        `;
-        document.body.appendChild(navPanel);
-    }
-
-    // Update navigation panel with current step
-    function updateNavigationPanel() {
-        if (!currentRoute || !isNavigating) return;
-        
-        const steps = currentRoute.routes[0].legs[0].steps;
-        
-        if (currentStepIndex >= steps.length) {
-            showArrivalMessage();
-            return;
-        }
-        
-        const currentStep = steps[currentStepIndex];
-        const nextStep = currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
-        
-        // Current instruction (remove HTML tags)
-        const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-        document.getElementById('current-instruction').textContent = instruction;
-        
-        // Initial distance for this step (will be updated in real-time)
-        document.getElementById('step-distance').textContent = currentStep.distance.text;
-        
-        // Calculate remaining time for all remaining steps
-        let remainingDuration = 0;
-        for (let i = currentStepIndex; i < steps.length; i++) {
-            remainingDuration += steps[i].duration.value;
-        }
-        
-        const remainingTimeMinutes = Math.ceil(remainingDuration / 60);
-        document.getElementById('total-remaining').textContent = ` • ${remainingTimeMinutes} min remaining`;
-        
-        // Next instruction
-        if (nextStep) {
-            const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
-            document.getElementById('next-instruction').textContent = `Then: ${nextInstruction}`;
-        } else {
-            document.getElementById('next-instruction').textContent = `Then: Arrive at ${destination.name}`;
-        }
-        
-        console.log(`📍 Navigation panel updated - Step ${currentStepIndex + 1}/${steps.length}: ${instruction}`);
-        
-        // Immediately update distance to this waypoint
-        updateDistanceToNextTurn();
-    }
-
-    // Track navigation progress with every location update
-    function checkNavigationProgress() {
-        if (!isNavigating || !currentRoute || !userLocation) return;
-        
-        const steps = currentRoute.routes[0].legs[0].steps;
-        if (currentStepIndex >= steps.length) return;
-        
-        const currentStep = steps[currentStepIndex];
-        const stepEndLocation = currentStep.end_location;
-        
-        let stepEndLat, stepEndLng;
-        if (typeof stepEndLocation.lat === 'function') {
-            stepEndLat = stepEndLocation.lat();
-            stepEndLng = stepEndLocation.lng();
-        } else {
-            stepEndLat = stepEndLocation.lat;
-            stepEndLng = stepEndLocation.lng;
-        }
-        
-        const distanceToTurn = calculateDistance(
-            userLocation.lat, userLocation.lng,
-            stepEndLat, stepEndLng
-        );
-        
-        // If within 20 meters of step end, move to next step
-        if (distanceToTurn < 0.02) { // 20 meters
-            console.log(`🎯 Turn completed! Step ${currentStepIndex + 1} finished. Advancing to next step.`);
-            
-            // Show brief completion feedback
-            const instructionElement = document.getElementById('current-instruction');
-            const originalText = instructionElement.textContent;
-            instructionElement.textContent = "✅ Turn completed!";
-            instructionElement.style.color = "#34A853";
-            
-            // Advance to next step after brief delay
-            setTimeout(() => {
-                currentStepIndex++;
-                instructionElement.style.color = "#1976d2"; // Reset color
-                updateNavigationPanel();
-            }, 1000);
-            
-            // If we've completed all steps, check if we've arrived at destination
-            if (currentStepIndex + 1 >= steps.length) {
-                const destinationDistance = calculateDistance(
-                    userLocation.lat, userLocation.lng,
-                    destination.lat, destination.lng
-                );
-                
-                console.log(`Distance to final destination: ${(destinationDistance * 1000).toFixed(0)}m`);
-                
-                if (destinationDistance < 0.05) { // 50 meters of destination
-                    setTimeout(() => {
-                        showArrivalMessage();
-                    }, 1500);
+            // Initialize directions
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                draggable: false,
+                panel: null,
+                suppressMarkers: true,
+                polylineOptions: {
+                    strokeColor: '#0f52ba',
+                    strokeWeight: 6,
+                    strokeOpacity: 0.9
                 }
+            });
+            directionsRenderer.setMap(map);
+
+            // Add markers
+            updateUserMarker();
+            addDestinationMarker();
+            
+            // Start location tracking
+            startLocationTracking();
+        }
+
+        function updateUserMarker() {
+            if (userMarker) {
+                userMarker.setMap(null);
+            }
+            
+            userMarker = new google.maps.Marker({
+                position: userLocation,
+                map: map,
+                title: "Your Location",
+                zIndex: 1000,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+                            <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
+                            <circle cx="10" cy="10" r="2" fill="white"/>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(20, 20),
+                    anchor: new google.maps.Point(10, 10)
+                }
+            });
+        }
+
+        function addDestinationMarker() {
+            destinationMarker = new google.maps.Marker({
+                position: { lat: destination.lat, lng: destination.lng },
+                map: map,
+                title: destination.name,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="16" cy="38" rx="8" ry="2" fill="rgba(0,0,0,0.2)"/>
+                            <path d="M16 0C7.2 0 0 7.2 0 16c0 8.8 16 24 16 24s16-15.2 16-24C32 7.2 24.8 0 16 0z" fill="#002236"/>
+                            <circle cx="16" cy="16" r="10" fill="white"/>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(32, 40),
+                    anchor: new google.maps.Point(16, 40)
+                }
+            });
+        }
+
+        function startLocationTracking() {
+            if (!navigator.geolocation) return;
+            
+            const trackLocation = () => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const newLocation = { 
+                            lat: position.coords.latitude, 
+                            lng: position.coords.longitude 
+                        };
+                        
+                        // Only update if location actually changed significantly
+                        if (!userLocation || calculateDistance(userLocation.lat, userLocation.lng, newLocation.lat, newLocation.lng) > 0.001) {
+                            userLocation = newLocation;
+                            updateUserMarker();
+                            lastLocationUpdate = Date.now();
+                            
+                            if (isNavigating) {
+                                map.panTo(userLocation);
+                                checkNavigationProgress();
+                                updateDistanceCountdown();
+                            }
+                        }
+                    },
+                    (error) => console.log("Location error:", error.message),
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 500 }
+                );
+            };
+            
+            trackLocation();
+            // Update every 500ms for responsive navigation
+            setInterval(trackLocation, 500);
+        }
+
+        function forceCreateRoute() {
+            const button = document.getElementById('start-nav-button');
+            button.textContent = "Creating route...";
+            button.disabled = true;
+            
+            const request = {
+                origin: userLocation,
+                destination: { lat: destination.lat, lng: destination.lng },
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+            
+            directionsService.route(request, (result, status) => {
+                if (status === 'OK') {
+                    currentRoute = result;
+                    routeSteps = result.routes[0].legs[0].steps;
+                    directionsRenderer.setDirections(result);
+                    
+                    button.textContent = "Start Navigation";
+                    button.disabled = false;
+                    button.onclick = startNavigation;
+                } else {
+                    createSimpleRoute();
+                    button.textContent = "Start Navigation";
+                    button.disabled = false;
+                    button.onclick = startNavigation;
+                }
+            });
+        }
+
+        function createSimpleRoute() {
+            const routePath = [
+                userLocation,
+                { lat: userLocation.lat + (destination.lat - userLocation.lat) * 0.5, 
+                  lng: userLocation.lng + (destination.lng - userLocation.lng) * 0.5 },
+                { lat: destination.lat, lng: destination.lng }
+            ];
+
+            new google.maps.Polyline({
+                path: routePath,
+                geodesic: true,
+                strokeColor: '#0f52ba',
+                strokeOpacity: 0.9,
+                strokeWeight: 6,
+                map: map
+            });
+
+            // Create simple steps for fallback
+            routeSteps = [{
+                instructions: "Follow the blue line to Hollywood Sign",
+                distance: { text: "Est. route", value: calculateDistance(userLocation.lat, userLocation.lng, destination.lat, destination.lng) * 1000 },
+                duration: { text: "Est. time", value: 600 },
+                end_location: { lat: destination.lat, lng: destination.lng }
+            }];
+        }
+
+        function startNavigation() {
+            isNavigating = true;
+            currentStepIndex = 0;
+            
+            // Hide start button
+            document.getElementById('start-nav-button').style.display = 'none';
+            
+            // Create navigation UI
+            createNavigationPanel();
+            createBottomBar();
+            
+            if (userLocation) {
+                map.setCenter(userLocation);
+                map.setZoom(18);
+            }
+            
+            updateNavigationPanel();
+            updateBottomBar();
+            
+            console.log("🧭 Navigation started");
+        }
+
+        function createNavigationPanel() {
+            const navPanel = document.createElement('div');
+            navPanel.id = 'navigation-panel';
+            navPanel.onclick = toggleDirectionsPanel;
+            navPanel.innerHTML = `
+                <div id="current-nav-content">
+                    <div id="current-instruction"></div>
+                    <div id="distance-time">
+                        <span id="step-distance"></span>
+                        <span id="next-instruction"></span>
+                    </div>
+                </div>
+                <div id="all-directions"></div>
+                <div class="expand-indicator"></div>
+            `;
+            document.body.appendChild(navPanel);
+        }
+
+        function createBottomBar() {
+            const bottomBar = document.createElement('div');
+            bottomBar.id = 'bottom-bar';
+            bottomBar.innerHTML = `
+                <div id="arrival-info">
+                    <div id="arrival-time"></div>
+                    <div id="remaining-stats"></div>
+                </div>
+                <button id="end-nav-button" onclick="stopNavigation()">End Route</button>
+            `;
+            document.body.appendChild(bottomBar);
+        }
+
+        function toggleDirectionsPanel() {
+            const panel = document.getElementById('navigation-panel');
+            const isExpanded = panel.classList.contains('expanded');
+            
+            if (isExpanded) {
+                panel.classList.remove('expanded');
+            } else {
+                panel.classList.add('expanded');
+                updateAllDirections();
             }
         }
-    }
 
-    // Update distance to next turn in real-time
-    function updateDistanceToNextTurn() {
-        if (!isNavigating || !currentRoute || !userLocation) return;
-        
-        const steps = currentRoute.routes[0].legs[0].steps;
-        if (currentStepIndex >= steps.length) return;
-        
-        const currentStep = steps[currentStepIndex];
-        const stepEndLocation = currentStep.end_location;
-        
-        let stepEndLat, stepEndLng;
-        if (typeof stepEndLocation.lat === 'function') {
-            stepEndLat = stepEndLocation.lat();
-            stepEndLng = stepEndLocation.lng();
-        } else {
-            stepEndLat = stepEndLocation.lat;
-            stepEndLng = stepEndLocation.lng;
+        function updateNavigationPanel() {
+            if (!isNavigating || !routeSteps.length) return;
+            
+            if (currentStepIndex >= routeSteps.length) {
+                showArrivalMessage();
+                return;
+            }
+            
+            const currentStep = routeSteps[currentStepIndex];
+            const nextStep = currentStepIndex + 1 < routeSteps.length ? routeSteps[currentStepIndex + 1] : null;
+            
+            // Current instruction
+            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
+            document.getElementById('current-instruction').textContent = instruction;
+            
+            // Distance to current step
+            updateDistanceCountdown();
+            
+            // Next instruction
+            if (nextStep) {
+                const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
+                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction.substring(0, 50)}${nextInstruction.length > 50 ? '...' : ''}`;
+            } else {
+                document.getElementById('next-instruction').textContent = `Then: Arrive at ${destination.name}`;
+            }
         }
-        
-        const distanceToTurn = calculateDistance(
-            userLocation.lat, userLocation.lng,
-            stepEndLat, stepEndLng
-        );
-        
-        // Convert to appropriate units (feet for short distances, miles for longer)
-        let distanceText;
-        const distanceInMeters = distanceToTurn * 1000;
-        const distanceInFeet = distanceInMeters * 3.28084;
-        
-        if (distanceInFeet < 500) {
-            distanceText = `${Math.round(distanceInFeet)} ft`;
-        } else {
-            const distanceInMiles = distanceToTurn * 0.621371;
-            distanceText = `${distanceInMiles.toFixed(1)} mi`;
+
+        function updateAllDirections() {
+            const container = document.getElementById('all-directions');
+            if (!container || !routeSteps.length) return;
+            
+            container.innerHTML = '';
+            
+            routeSteps.forEach((step, index) => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = `direction-step ${index === currentStepIndex ? 'current' : ''}`;
+                
+                const instruction = step.instructions.replace(/<[^>]*>/g, '');
+                
+                stepDiv.innerHTML = `
+                    <div class="step-number ${index === currentStepIndex ? 'current' : ''}">${index + 1}</div>
+                    <div class="step-text">${instruction}</div>
+                    <div class="step-distance">${step.distance.text}</div>
+                `;
+                
+                container.appendChild(stepDiv);
+            });
         }
-        
-        // Update the step distance in real-time
-        const stepDistanceElement = document.getElementById('step-distance');
-        if (stepDistanceElement) {
-            stepDistanceElement.textContent = distanceText;
+
+        function updateBottomBar() {
+            if (!isNavigating || !currentRoute) return;
+            
+            // Calculate remaining time and distance
+            let remainingDuration = 0;
+            let remainingDistance = 0;
+            
+            for (let i = currentStepIndex; i < routeSteps.length; i++) {
+                remainingDuration += routeSteps[i].duration.value;
+                remainingDistance += routeSteps[i].distance.value;
+            }
+            
+            // Calculate arrival time
+            const arrivalTime = new Date(Date.now() + remainingDuration * 1000);
+            const timeString = arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            
+            // Update display
+            document.getElementById('arrival-time').textContent = `Arrive ${timeString}`;
+            
+            const remainingMinutes = Math.ceil(remainingDuration / 60);
+            const remainingMiles = (remainingDistance * 0.000621371).toFixed(1);
+            
+            document.getElementById('remaining-stats').textContent = `${remainingMinutes} min • ${remainingMiles} mi`;
         }
-    }
 
-    // Show arrival message
-    function showArrivalMessage() {
-        document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
-        document.getElementById('step-distance').textContent = "";
-        document.getElementById('total-remaining').textContent = "Journey complete";
-        document.getElementById('next-instruction').textContent = `Welcome to ${destination.name}! 🎯`;
-    }
-
-    function stopNavigation() {
-        isNavigating = false;
-        currentStepIndex = 0;
-        
-        // Remove navigation panel
-        const navPanel = document.getElementById('navigation-panel');
-        if (navPanel) {
-            navPanel.remove();
+        function updateDistanceCountdown() {
+            if (!isNavigating || !routeSteps.length || !userLocation) return;
+            
+            if (currentStepIndex >= routeSteps.length) return;
+            
+            const currentStep = routeSteps[currentStepIndex];
+            const stepEndLocation = currentStep.end_location;
+            
+            let stepEndLat, stepEndLng;
+            if (typeof stepEndLocation.lat === 'function') {
+                stepEndLat = stepEndLocation.lat();
+                stepEndLng = stepEndLocation.lng();
+            } else {
+                stepEndLat = stepEndLocation.lat;
+                stepEndLng = stepEndLocation.lng;
+            }
+            
+            const distanceToTurn = calculateDistance(
+                userLocation.lat, userLocation.lng,
+                stepEndLat, stepEndLng
+            );
+            
+            // Convert to appropriate units
+            let distanceText;
+            const distanceInMeters = distanceToTurn * 1000;
+            const distanceInFeet = distanceInMeters * 3.28084;
+            
+            if (distanceInFeet < 500) {
+                distanceText = `${Math.round(distanceInFeet)} ft`;
+            } else {
+                const distanceInMiles = distanceToTurn * 0.621371;
+                distanceText = `${distanceInMiles.toFixed(1)} mi`;
+            }
+            
+            document.getElementById('step-distance').textContent = distanceText;
         }
-        
-        // Show controls again
-        document.getElementById('controls').style.display = 'block';
-        
-        if (userLocation) {
-            map.setZoom(14);
+
+        function checkNavigationProgress() {
+            if (!isNavigating || !routeSteps.length || !userLocation) return;
+            
+            if (currentStepIndex >= routeSteps.length) return;
+            
+            const currentStep = routeSteps[currentStepIndex];
+            const stepEndLocation = currentStep.end_location;
+            
+            let stepEndLat, stepEndLng;
+            if (typeof stepEndLocation.lat === 'function') {
+                stepEndLat = stepEndLocation.lat();
+                stepEndLng = stepEndLocation.lng();
+            } else {
+                stepEndLat = stepEndLocation.lat;
+                stepEndLng = stepEndLocation.lng;
+            }
+            
+            const distanceToTurn = calculateDistance(
+                userLocation.lat, userLocation.lng,
+                stepEndLat, stepEndLng
+            );
+            
+            // If within 15 meters of step end, advance to next step
+            if (distanceToTurn < 0.015) { // 15 meters
+                console.log(`🎯 Turn completed! Step ${currentStepIndex + 1} finished.`);
+                
+                // Brief completion feedback
+                const instructionElement = document.getElementById('current-instruction');
+                const originalText = instructionElement.textContent;
+                instructionElement.textContent = "✅ Turn completed!";
+                instructionElement.style.color = "#046307ff";
+                
+                setTimeout(() => {
+                    currentStepIndex++;
+                    instructionElement.style.color = "#100c08";
+                    updateNavigationPanel();
+                    updateBottomBar();
+                    
+                    // Check if arrived at destination
+                    if (currentStepIndex >= routeSteps.length) {
+                        const destinationDistance = calculateDistance(
+                            userLocation.lat, userLocation.lng,
+                            destination.lat, destination.lng
+                        );
+                        
+                        if (destinationDistance < 0.05) { // 50 meters
+                            setTimeout(showArrivalMessage, 1000);
+                        }
+                    }
+                }, 1500);
+            }
         }
-        
-        updateStatus("Navigation ended");
-        
-        // Change button back
-        document.getElementById('nav-button').textContent = '🧭 Start Navigation';
-        document.getElementById('nav-button').onclick = startNavigation;
-    }
 
-    function updateStatus(message) {
-        document.getElementById('status').textContent = message;
-    }
+        function showArrivalMessage() {
+            document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
+            document.getElementById('step-distance').textContent = "";
+            document.getElementById('next-instruction').textContent = `Welcome to ${destination.name}!`;
+            document.getElementById('arrival-time').textContent = "Arrived";
+            document.getElementById('remaining-stats').textContent = "Journey complete";
+        }
 
-    // Calculate distance between two points in kilometers
-    function calculateDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371; // Earth's radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
-</script>
+        function stopNavigation() {
+            isNavigating = false;
+            currentStepIndex = 0;
+            
+            // Remove navigation UI
+            const navPanel = document.getElementById('navigation-panel');
+            const bottomBar = document.getElementById('bottom-bar');
+            
+            if (navPanel) navPanel.remove();
+            if (bottomBar) bottomBar.remove();
+            
+            // Show start button again
+            document.getElementById('start-nav-button').style.display = 'block';
+            document.getElementById('start-nav-button').textContent = 'Start Navigation';
+            document.getElementById('start-nav-button').onclick = startNavigation;
+            
+            if (userLocation) {
+                map.setZoom(14);
+            }
+            
+            console.log("Navigation ended");
+        }
 
-<script async defer
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDdD8BAz34j_0zv-G3qJKTP5sKQn7PQ1w&callback=initMap">
-</script>
-```
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+    </script>
 
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDdD8BAz34j_0zv-G3qJKTP5sKQn7PQ1w&callback=initMap">
+    </script>
 </body>
 </html>
