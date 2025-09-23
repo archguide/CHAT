@@ -1,4 +1,52 @@
-<!DOCTYPE html>
+// Fallback test route with realistic LA street names
+        function createTestRoute() {
+            if (!userLocation) return;
+            
+            // Create realistic LA directions
+            currentRoute = {
+                routes: [{
+                    legs: [{
+                        distance: { text: "8.2 mi", value: 13193 },
+                        duration: { text: "18 mins", value: 1080 },
+                        steps: [
+                            {
+                                instructions: "Head <b>north</b> on <b>S Figueroa St</b> toward <b>W 7th St</b>",
+                                distance: { text: "0.4 mi", value: 644 },
+                                duration: { text: "2 mins", value: 120 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.002, 
+                                    lng: userLocation.lng 
+                                }
+                            },
+                            {
+                                instructions: "Turn <b>right</b> onto <b>US-101 N</b>",
+                                distance: { text: "4.8 mi", value: 7724 },
+                                duration: { text: "8 mins", value: 480 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.01, 
+                                    lng: userLocation.lng + 0.005
+                                }
+                            },
+                            {
+                                instructions: "Take exit <b>2B</b> for <b>Gower St</b> toward <b>Hollywood</b>",
+                                distance: { text: "0.3 mi", value: 483 },
+                                duration: { text: "1 min", value: 60 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.015, 
+                                    lng: userLocation.lng + 0.008
+                                }
+                            },
+                            {
+                                instructions: "Turn <b>left</b> onto <b>Franklin Ave</b>",
+                                distance: { text: "1.2 mi", value: 1931 },
+                                duration: { text: "4 mins", value: 240 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.02, 
+                                    lng: userLocation.lng + 0.015
+                                }
+                            },
+                            {
+                                instructions<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -158,10 +206,11 @@
                 draggable: false,
                 panel: null,
                 suppressMarkers: true,
+                preserveViewport: false,
                 polylineOptions: {
                     strokeColor: '#007AFF',
                     strokeWeight: 6,
-                    strokeOpacity: 0.8
+                    strokeOpacity: 0.9
                 }
             });
             directionsRenderer.setMap(map);
@@ -285,7 +334,11 @@
             
             directionsService.route(request, (result, status) => {
                 if (status === 'OK') {
+                    console.log("✅ Google Directions API success");
                     currentRoute = result;
+                    
+                    // Show the route polyline immediately
+                    directionsRenderer.setDirections(result);
                     
                     const route = result.routes[0];
                     const leg = route.legs[0];
@@ -293,15 +346,17 @@
                     updateStatus(`Route ready: ${leg.distance.text}, ${leg.duration.text}`);
                     document.getElementById('nav-button').disabled = false;
                 } else {
-                    console.error('Directions failed:', status);
+                    console.log("❌ Google Directions failed:", status);
                     createTestRoute();
                 }
             });
         }
 
-        // Fallback test route with realistic LA street names
+        // Fallback test route with manual polyline
         function createTestRoute() {
             if (!userLocation) return;
+            
+            console.log("🔄 Creating test route with manual polyline");
             
             // Create realistic LA directions
             currentRoute = {
@@ -378,8 +433,39 @@
                 }]
             };
             
+            // Create manual polyline since DirectionsRenderer doesn't work with test data
+            createManualPolyline();
+            
             updateStatus(`Test route ready: 8.2 mi, 18 mins`);
             document.getElementById('nav-button').disabled = false;
+        }
+
+        // Create manual polyline for test route
+        function createManualPolyline() {
+            // Simple straight line path from user to destination for now
+            const routePath = [
+                userLocation,
+                { lat: userLocation.lat + (destination.lat - userLocation.lat) * 0.3, lng: userLocation.lng + (destination.lng - userLocation.lng) * 0.3 },
+                { lat: userLocation.lat + (destination.lat - userLocation.lat) * 0.6, lng: userLocation.lng + (destination.lng - userLocation.lng) * 0.6 },
+                { lat: destination.lat, lng: destination.lng }
+            ];
+
+            // Remove existing polyline if any
+            if (window.routePolyline) {
+                window.routePolyline.setMap(null);
+            }
+
+            // Create new polyline
+            window.routePolyline = new google.maps.Polyline({
+                path: routePath,
+                geodesic: true,
+                strokeColor: '#007AFF',
+                strokeOpacity: 0.9,
+                strokeWeight: 6
+            });
+
+            window.routePolyline.setMap(map);
+            console.log("✅ Manual polyline created");
         }
 
         // Start navigation
@@ -392,8 +478,14 @@
             document.getElementById('controls').style.display = 'none';
             document.getElementById('navigation-panel').style.display = 'block';
             
-            // Show route line
-            directionsRenderer.setDirections(currentRoute);
+            // Make sure route line is visible during navigation
+            if (directionsRenderer && currentRoute.routes) {
+                // If we have a Google route, use DirectionsRenderer
+                directionsRenderer.setDirections(currentRoute);
+            } else if (window.routePolyline) {
+                // If we have a manual polyline, make sure it's visible
+                window.routePolyline.setMap(map);
+            }
             
             if (userLocation) {
                 map.setCenter(userLocation);
@@ -484,14 +576,14 @@
             document.getElementById('controls').style.display = 'block';
             document.getElementById('nav-button').disabled = false;
             
-            // Hide route line
-            directionsRenderer.setDirections({routes: []});
+            // Keep route lines visible (don't hide them)
+            // User can see the route even when not navigating
             
             if (userLocation) {
                 map.setZoom(14);
             }
             
-            updateStatus("Navigation ended");
+            updateStatus("Navigation ended - Route still visible");
         }
 
         function updateStatus(message) {
