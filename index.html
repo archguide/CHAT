@@ -20,6 +20,40 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             backdrop-filter: blur(10px);
         }
+        #navigation-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%);
+            padding: 50px 20px 20px 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+        }
+        #current-instruction {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1976d2;
+            line-height: 1.3;
+        }
+        #distance-time {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        #next-instruction {
+            font-size: 14px;
+            color: #888;
+            padding: 10px 15px;
+            background: rgba(245,245,245,0.8);
+            border-radius: 12px;
+            border-left: 4px solid #4285f4;
+        }
         button {
             background: #007AFF;
             color: white;
@@ -42,6 +76,12 @@
             transform: none;
             box-shadow: none;
         }
+        .stop-button {
+            background: #FF3B30;
+            margin-top: 15px;
+            width: 100%;
+        }
+        .stop-button:hover { background: #D70015; }
         #status {
             font-size: 14px;
             color: white;
@@ -64,6 +104,7 @@
         let userLocation = null;
         let isNavigating = false;
         let currentRoute = null;
+        let currentStepIndex = 0;
         let userMarker = null;
         let destinationMarker = null;
         
@@ -171,7 +212,10 @@
                         };
                         updateUserMarker();
                         
-                        if (!isNavigating) {
+                        // During navigation, keep map centered on user
+                        if (isNavigating) {
+                            map.panTo(userLocation);
+                        } else {
                             updateStatus(`📍 ${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`);
                         }
                     },
@@ -238,25 +282,151 @@
 
         function startNavigation() {
             isNavigating = true;
-            updateStatus("🧭 Navigation active - follow the blue line!");
+            currentStepIndex = 0;
+            
+            // Hide controls and create navigation panel
+            document.getElementById('controls').style.display = 'none';
+            createNavigationPanel();
             
             if (userLocation) {
                 map.setCenter(userLocation);
-                map.setZoom(16);
+                map.setZoom(18);
             }
             
-            // Change button to stop navigation
-            document.getElementById('nav-button').textContent = '⏹️ Stop Navigation';
-            document.getElementById('nav-button').onclick = stopNavigation;
+            // Start showing turn-by-turn directions if we have a real route
+            if (currentRoute && currentRoute.routes[0].legs[0].steps) {
+                updateNavigationPanel();
+            } else {
+                // Simple navigation for manual route
+                document.getElementById('current-instruction').textContent = "Follow the blue line to Hollywood Sign";
+                document.getElementById('distance-time').textContent = "Navigate using the route shown";
+                document.getElementById('next-instruction').textContent = "Stay on the blue path to reach your destination";
+            }
+            
+            // Start checking navigation progress
+            startNavigationTracking();
+        }
+
+        // Create navigation panel dynamically
+        function createNavigationPanel() {
+            const navPanel = document.createElement('div');
+            navPanel.id = 'navigation-panel';
+            navPanel.innerHTML = `
+                <div id="current-instruction"></div>
+                <div id="distance-time">
+                    <span id="step-distance"></span>
+                    <span id="total-remaining"></span>
+                </div>
+                <div id="next-instruction"></div>
+                <button onclick="stopNavigation()" class="stop-button">End Navigation</button>
+            `;
+            document.body.appendChild(navPanel);
+        }
+
+        // Update navigation panel with current step
+        function updateNavigationPanel() {
+            if (!currentRoute || !isNavigating) return;
+            
+            const steps = currentRoute.routes[0].legs[0].steps;
+            
+            if (currentStepIndex >= steps.length) {
+                document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
+                document.getElementById('step-distance').textContent = "";
+                document.getElementById('total-remaining').textContent = "Destination reached";
+                document.getElementById('next-instruction').textContent = `Welcome to ${destination.name}!`;
+                return;
+            }
+            
+            const currentStep = steps[currentStepIndex];
+            const nextStep = currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
+            
+            // Current instruction (remove HTML tags)
+            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
+            document.getElementById('current-instruction').textContent = instruction;
+            
+            // Distance and time for this step
+            document.getElementById('step-distance').textContent = currentStep.distance.text;
+            
+            // Calculate remaining time
+            let remainingDuration = 0;
+            for (let i = currentStepIndex; i < steps.length; i++) {
+                remainingDuration += steps[i].duration.value;
+            }
+            
+            const remainingTimeMinutes = Math.ceil(remainingDuration / 60);
+            document.getElementById('total-remaining').textContent = ` • ${remainingTimeMinutes} min remaining`;
+            
+            // Next instruction
+            if (nextStep) {
+                const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
+                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction}`;
+            } else {
+                document.getElementById('next-instruction').textContent = `Then: Arrive at ${destination.name}`;
+            }
+        }
+
+        // Track navigation progress
+        function startNavigationTracking() {
+            if (!isNavigating) return;
+            
+            const checkProgress = () => {
+                if (!isNavigating || !currentRoute) return;
+                
+                const steps = currentRoute.routes[0].legs[0].steps;
+                if (currentStepIndex >= steps.length) return;
+                
+                const currentStep = steps[currentStepIndex];
+                const stepEndLocation = currentStep.end_location;
+                
+                let stepEndLat, stepEndLng;
+                if (typeof stepEndLocation.lat === 'function') {
+                    stepEndLat = stepEndLocation.lat();
+                    stepEndLng = stepEndLocation.lng();
+                } else {
+                    stepEndLat = stepEndLocation.lat;
+                    stepEndLng = stepEndLocation.lng;
+                }
+                
+                const distance = calculateDistance(
+                    userLocation.lat, userLocation.lng,
+                    stepEndLat, stepEndLng
+                );
+                
+                // If within 30 meters of step end, move to next step
+                if (distance < 0.03) {
+                    currentStepIndex++;
+                    updateNavigationPanel();
+                }
+            };
+            
+            // Check progress every 3 seconds
+            const progressInterval = setInterval(() => {
+                if (!isNavigating) {
+                    clearInterval(progressInterval);
+                    return;
+                }
+                checkProgress();
+            }, 3000);
         }
 
         function stopNavigation() {
             isNavigating = false;
-            updateStatus("Navigation ended");
+            currentStepIndex = 0;
+            
+            // Remove navigation panel
+            const navPanel = document.getElementById('navigation-panel');
+            if (navPanel) {
+                navPanel.remove();
+            }
+            
+            // Show controls again
+            document.getElementById('controls').style.display = 'block';
             
             if (userLocation) {
                 map.setZoom(14);
             }
+            
+            updateStatus("Navigation ended");
             
             // Change button back
             document.getElementById('nav-button').textContent = '🧭 Start Navigation';
@@ -265,6 +435,18 @@
 
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
+        }
+
+        // Calculate distance between two points in kilometers
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
         }
     </script>
 
