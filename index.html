@@ -78,7 +78,7 @@
             padding: 50px 20px 20px 20px;
             box-shadow: 0 2px 20px rgba(0,0,0,0.1);
             backdrop-filter: blur(10px);
-            display: none;
+            display: none !important; /* Force hidden until navigation starts */
             border-bottom-left-radius: 20px;
             border-bottom-right-radius: 20px;
         }
@@ -343,7 +343,7 @@
                     const route = result.routes[0];
                     const leg = route.legs[0];
                     
-                    updateStatus(`Route ready: ${leg.distance.text}, ${leg.duration.text}`);
+                    updateStatus(`Ready: ${leg.distance.text}, ${leg.duration.text}`);
                     document.getElementById('nav-button').disabled = false;
                 } else {
                     console.log("❌ Google Directions failed:", status);
@@ -436,7 +436,7 @@
             // Create manual polyline since DirectionsRenderer doesn't work with test data
             createManualPolyline();
             
-            updateStatus(`Test route ready: 8.2 mi, 18 mins`);
+            updateStatus(`Ready: 8.2 mi, 18 mins`);
             document.getElementById('nav-button').disabled = false;
         }
 
@@ -475,8 +475,11 @@
             isNavigating = true;
             currentStepIndex = 0;
             
+            // Hide controls and show navigation panel
             document.getElementById('controls').style.display = 'none';
-            document.getElementById('navigation-panel').style.display = 'block';
+            const navPanel = document.getElementById('navigation-panel');
+            navPanel.style.display = 'block';
+            navPanel.style.setProperty('display', 'block', 'important'); // Override the !important in CSS
             
             // Make sure route line is visible during navigation
             if (directionsRenderer && currentRoute.routes) {
@@ -492,6 +495,7 @@
                 map.setZoom(18);
             }
             
+            // Now show the first navigation instruction
             updateNavigationPanel();
         }
 
@@ -572,7 +576,11 @@
             isNavigating = false;
             currentStepIndex = 0;
             
-            document.getElementById('navigation-panel').style.display = 'none';
+            // Hide navigation panel and show controls
+            const navPanel = document.getElementById('navigation-panel');
+            navPanel.style.display = 'none';
+            navPanel.style.setProperty('display', 'none', 'important'); // Ensure it's hidden
+            
             document.getElementById('controls').style.display = 'block';
             document.getElementById('nav-button').disabled = false;
             
@@ -583,7 +591,7 @@
                 map.setZoom(14);
             }
             
-            updateStatus("Navigation ended - Route still visible");
+            updateStatus("Navigation ended");
         }
 
         function updateStatus(message) {
