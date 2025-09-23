@@ -88,6 +88,7 @@ function routeToNextStop() {
     <div id="controls">
         <button onclick="routeToNextStop()">Show Route to Next Stop</button>
         <button onclick="startInAppNavigation()" class="nav-button" id="nav-button">Start Navigation</button>
+        <button onclick="testNavigation()" style="background: #9C27B0;">Test Navigation</button>
         <button onclick="goToNextStop()">Next Destination</button>
         <div id="status">Loading...</div>
         <div id="destination-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
@@ -348,6 +349,11 @@ function routeToNextStop() {
         }
 
         function goToNextStop() {
+            // Stop current navigation if active
+            if (isNavigating) {
+                stopNavigation();
+            }
+            
             currentStopIndex++;
             if (currentStopIndex >= stops.length) {
                 updateStatus("Tour complete! You've visited all stops.");
@@ -359,6 +365,35 @@ function routeToNextStop() {
 
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
+        }
+
+        // Test function to debug navigation issues
+        function testNavigation() {
+            console.log("Testing navigation...");
+            console.log("userLocation:", userLocation);
+            console.log("currentRoute:", currentRoute);
+            console.log("isNavigating:", isNavigating);
+            
+            if (!currentRoute) {
+                alert("No route available. Click 'Show Route to Next Stop' first.");
+                return;
+            }
+            
+            // Force show navigation panel for testing
+            document.getElementById('navigation-panel').style.display = 'block';
+            
+            // Test updating the panel with first instruction
+            if (currentRoute.routes[0].legs[0].steps.length > 0) {
+                const firstStep = currentRoute.routes[0].legs[0].steps[0];
+                const instruction = firstStep.instructions.replace(/<[^>]*>/g, '');
+                
+                document.getElementById('current-instruction').textContent = "TEST: " + instruction;
+                document.getElementById('step-distance').textContent = firstStep.distance.text;
+                document.getElementById('total-remaining').textContent = "Test mode";
+                document.getElementById('next-instruction').textContent = "This is a test of the navigation panel";
+                
+                updateStatus("Test navigation panel shown. If you can see this, the navigation should work!");
+            }
         }
 
         // Fallback: Get approximate location from IP
