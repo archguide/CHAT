@@ -88,37 +88,6 @@
             color: white;
             text-align: center;
         }
-        
-        /* Animated location dot */
-        .location-dot {
-            width: 20px;
-            height: 20px;
-            background: #007AFF;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 0 3px rgba(0,122,255,0.3);
-            animation: pulse 2s infinite;
-        }
-        
-        .location-dot-outer {
-            width: 40px;
-            height: 40px;
-            background: rgba(0,122,255,0.2);
-            border-radius: 50%;
-            animation: pulse-outer 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-        
-        @keyframes pulse-outer {
-            0% { transform: scale(1); opacity: 0.7; }
-            50% { transform: scale(1.2); opacity: 0.3; }
-            100% { transform: scale(1.4); opacity: 0; }
-        }
     </style>
 </head>
 <body>
@@ -136,7 +105,7 @@
     <!-- Simple start button for testing -->
     <div id="controls">
         <button onclick="startInAppNavigation()" id="nav-button" disabled>🧭 Start Navigation</button>
-        <div id="status">Loading map...</div>
+        <div id="status">Loading...</div>
     </div>
 
     <div id="map"></div>
@@ -175,9 +144,9 @@
             if (!isNaN(lat) && !isNaN(lng)) {
                 userLocation = { lat: lat, lng: lng };
                 mapCenter = userLocation;
-                updateStatus(`✅ Location loaded: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                updateStatus(`Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
             } else {
-                updateStatus("⚠️ No location in URL. Add ?lat=34.0522&lng=-118.2437");
+                updateStatus("No location in URL. Add ?lat=34.0522&lng=-118.2437");
             }
 
             // Initialize map
@@ -203,23 +172,27 @@
                 updateUserMarker();
             }
 
-            // Add markers for all stops
+            // Add markers for all stops (Apple Maps style)
             stops.forEach((stop, index) => {
                 new google.maps.Marker({
                     position: { lat: stop.lat, lng: stop.lng },
                     map: map,
                     title: stop.name,
-                    label: (index + 1).toString(),
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M15 0C6.7 0 0 6.7 0 15c0 8.3 15 25 15 25s15-16.7 15-25C30 6.7 23.3 0 15 0z" fill="#4285f4"/>
-                                <circle cx="15" cy="15" r="8" fill="white"/>
-                                <text x="15" y="20" text-anchor="middle" font-family="Arial" font-size="12" fill="#4285f4">${index + 1}</text>
+                            <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Pin shadow -->
+                                <ellipse cx="16" cy="38" rx="8" ry="2" fill="rgba(0,0,0,0.2)"/>
+                                <!-- Pin body -->
+                                <path d="M16 0C7.2 0 0 7.2 0 16c0 8.8 16 24 16 24s16-15.2 16-24C32 7.2 24.8 0 16 0z" fill="#FF3B30"/>
+                                <!-- White circle for number -->
+                                <circle cx="16" cy="16" r="10" fill="white"/>
+                                <!-- Number -->
+                                <text x="16" y="21" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600" fill="#FF3B30">${index + 1}</text>
                             </svg>
                         `),
-                        scaledSize: new google.maps.Size(30, 40),
-                        anchor: new google.maps.Point(15, 40)
+                        scaledSize: new google.maps.Size(32, 40),
+                        anchor: new google.maps.Point(16, 40)
                     }
                 });
             });
@@ -227,12 +200,43 @@
             // Listen for location updates from Draftbit
             setupLocationListener();
 
+            // Monitor URL for location updates (every 3 seconds from Draftbit)
+            startURLLocationMonitoring();
+
             // Auto-create route and enable navigation for testing
             if (userLocation) {
                 setTimeout(() => {
                     forceCreateRoute(); // Create test route
                 }, 1500);
             }
+        }
+
+        // Monitor URL parameters for location updates from Draftbit
+        function startURLLocationMonitoring() {
+            let lastLat = userLocation ? userLocation.lat : null;
+            let lastLng = userLocation ? userLocation.lng : null;
+            
+            setInterval(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const newLat = parseFloat(urlParams.get('lat'));
+                const newLng = parseFloat(urlParams.get('lng'));
+                
+                // Check if we have valid new coordinates and they're different
+                if (!isNaN(newLat) && !isNaN(newLng)) {
+                    if (newLat !== lastLat || newLng !== lastLng) {
+                        console.log("📍 URL location update detected:", newLat, newLng);
+                        
+                        // Update location
+                        handleLocationUpdate(newLat, newLng);
+                        
+                        // Update tracking variables
+                        lastLat = newLat;
+                        lastLng = newLng;
+                    }
+                }
+            }, 2000); // Check every 2 seconds to catch Draftbit's 3-second updates
+            
+            console.log("✅ URL location monitoring started");
         }
 
         // Listen for location updates from Draftbit
@@ -250,31 +254,35 @@
             });
             
             console.log("✅ Location listener setup - ready for Draftbit updates");
-            updateStatus("🔄 Ready to receive location updates from Draftbit");
+            updateStatus("Ready for location updates");
         }
 
-        // Handle location updates from Draftbit
+        // Handle location updates from Draftbit (URL or postMessage)
         function handleLocationUpdate(lat, lng) {
             console.log("📍 Location update received:", lat, lng);
             
             const newLocation = { lat: lat, lng: lng };
+            const oldLocation = userLocation;
             userLocation = newLocation;
             
             // Update user marker position
             updateUserMarker();
             
-            // Keep map centered on user (optional - can be toggled)
+            // Smooth map movement during navigation
             if (isNavigating) {
-                map.setCenter(userLocation);
+                // Keep map centered on user with smooth transition
+                map.panTo(userLocation);
+                
+                // Check navigation progress
+                if (currentRoute) {
+                    checkNavigationProgress();
+                }
             }
             
-            // Check navigation progress if we're navigating
-            if (isNavigating && currentRoute) {
-                checkNavigationProgress();
+            // Update status with current location (only show if not navigating)
+            if (!isNavigating) {
+                updateStatus(`📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
             }
-            
-            // Update status with current location
-            updateStatus(`📍 Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         }
 
         // Check if user has reached the next navigation step
@@ -324,7 +332,7 @@
             console.log("=== FORCE CREATE ROUTE ===");
             
             if (!userLocation) {
-                updateStatus("❌ No user location. Add ?lat=34.0522&lng=-118.2437 to URL");
+                updateStatus("No user location. Add ?lat=34.0522&lng=-118.2437 to URL");
                 return;
             }
             
@@ -374,7 +382,7 @@
             // Enable navigation button
             document.getElementById('nav-button').disabled = false;
             
-            updateStatus(`✅ Ready to navigate to ${nextStop.name}`);
+            updateStatus(`Ready to navigate to ${nextStop.name}`);
         }
 
         // Start in-app turn-by-turn navigation
@@ -383,7 +391,7 @@
             console.log("currentRoute exists:", !!currentRoute);
             
             if (!currentRoute) {
-                updateStatus("❌ No route available");
+                updateStatus("No route available");
                 return;
             }
 
@@ -502,29 +510,24 @@
                 userMarker.setMap(null);
             }
             
-            // Create animated location dot
+            // Apple Maps style location dot - solid blue circle
             userMarker = new google.maps.Marker({
                 position: userLocation,
                 map: map,
                 title: "Your Location",
                 icon: {
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                            <!-- Outer pulsing ring -->
-                            <circle cx="20" cy="20" r="18" fill="rgba(0,122,255,0.2)">
-                                <animate attributeName="r" values="18;22;18" dur="2s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite"/>
-                            </circle>
-                            <!-- Middle ring -->
-                            <circle cx="20" cy="20" r="12" fill="rgba(0,122,255,0.3)" stroke="white" stroke-width="2"/>
-                            <!-- Inner dot -->
-                            <circle cx="20" cy="20" r="6" fill="#007AFF" stroke="white" stroke-width="2">
-                                <animate attributeName="r" values="6;7;6" dur="2s" repeatCount="indefinite"/>
-                            </circle>
+                        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <!-- White border ring -->
+                            <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+                            <!-- Blue location dot -->
+                            <circle cx="12" cy="12" r="8" fill="#007AFF"/>
+                            <!-- Inner white dot -->
+                            <circle cx="12" cy="12" r="2" fill="white"/>
                         </svg>
                     `),
-                    scaledSize: new google.maps.Size(40, 40),
-                    anchor: new google.maps.Point(20, 20)
+                    scaledSize: new google.maps.Size(24, 24),
+                    anchor: new google.maps.Point(12, 12)
                 }
             });
         }
