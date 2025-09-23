@@ -5,113 +5,124 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LA Maps with Navigation</title>
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         #map { height: 100vh; width: 100%; }
         #controls {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 1000;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            max-width: 320px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
         }
         #navigation-panel {
             position: absolute;
-            bottom: 20px;
-            left: 10px;
-            right: 10px;
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 1000;
-            background: white;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%);
+            padding: 50px 20px 20px 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
             display: none;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
         }
         #current-instruction {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 10px;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 8px;
             color: #1976d2;
+            line-height: 1.3;
         }
         #distance-time {
-            font-size: 14px;
+            font-size: 16px;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            font-weight: 500;
         }
         #next-instruction {
-            font-size: 12px;
+            font-size: 14px;
             color: #888;
-            padding: 8px;
-            background: #f5f5f5;
-            border-radius: 6px;
+            padding: 10px 15px;
+            background: rgba(245,245,245,0.8);
+            border-radius: 12px;
+            border-left: 4px solid #4285f4;
         }
         button {
-            background: #4285f4;
+            background: #007AFF;
             color: white;
             border: none;
-            padding: 12px 15px;
-            border-radius: 6px;
+            padding: 12px 24px;
+            border-radius: 20px;
             cursor: pointer;
-            margin: 4px 0;
-            width: 100%;
-            font-size: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 2px 10px rgba(0,122,255,0.3);
         }
-        button:hover { background: #3367d6; }
+        button:hover { 
+            background: #0056CC;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(0,122,255,0.4);
+        }
         button:disabled { 
             background: #ccc; 
             cursor: not-allowed; 
+            transform: none;
+            box-shadow: none;
         }
-        .nav-button {
-            background: #34a853;
-            font-size: 16px;
-            padding: 12px;
-        }
-        .nav-button:hover { background: #2d8f43; }
-        .test-button {
-            background: #9C27B0;
-        }
-        .test-button:hover { background: #7B1FA2; }
-        .force-button {
-            background: #FF5722;
-            font-weight: bold;
-        }
-        .force-button:hover { background: #E64A19; }
         .stop-button {
-            background: #ea4335;
+            background: #FF3B30;
+            margin-top: 15px;
+            width: 100%;
         }
-        .stop-button:hover { background: #d33b2c; }
+        .stop-button:hover { background: #D70015; }
         #status {
-            margin-top: 10px;
-            font-size: 12px;
-            color: #666;
-            padding: 8px;
-            background: #f8f9fa;
-            border-radius: 4px;
+            font-size: 14px;
+            color: white;
+            text-align: center;
         }
-        #destination-info {
-            margin-top: 10px;
-            font-size: 12px;
-            color: #666;
-            padding: 8px;
-            background: #e8f5e8;
-            border-radius: 4px;
+        
+        /* Animated location dot */
+        .location-dot {
+            width: 20px;
+            height: 20px;
+            background: #007AFF;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(0,122,255,0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        .location-dot-outer {
+            width: 40px;
+            height: 40px;
+            background: rgba(0,122,255,0.2);
+            border-radius: 50%;
+            animation: pulse-outer 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes pulse-outer {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 0.3; }
+            100% { transform: scale(1.4); opacity: 0; }
         }
     </style>
 </head>
 <body>
-    <div id="controls">
-        <button onclick="routeToNextStop()">📍 Show Route to Next Stop</button>
-        <button onclick="startInAppNavigation()" class="nav-button" id="nav-button" disabled>🧭 Start Navigation</button>
-        <button onclick="testNavigation()" class="test-button">🔍 Test Navigation</button>
-        <button onclick="forceCreateRoute()" class="force-button">🚨 Force Create Test Route</button>
-        <button onclick="goToNextStop()">⏭️ Next Destination</button>
-        <div id="status">Loading map...</div>
-        <div id="destination-info"></div>
-    </div>
-
+    <!-- Navigation panel at top (Apple Maps style) -->
     <div id="navigation-panel">
         <div id="current-instruction">Turn left onto Main Street</div>
         <div id="distance-time">
@@ -119,7 +130,13 @@
             <span id="total-remaining">5 min remaining</span>
         </div>
         <div id="next-instruction">Then: Continue straight for 2.1 miles</div>
-        <button onclick="stopNavigation()" class="stop-button">Stop Navigation</button>
+        <button onclick="stopNavigation()" class="stop-button">End Navigation</button>
+    </div>
+
+    <!-- Simple start button for testing -->
+    <div id="controls">
+        <button onclick="startInAppNavigation()" id="nav-button" disabled>🧭 Start Navigation</button>
+        <div id="status">Loading map...</div>
     </div>
 
     <div id="map"></div>
@@ -165,7 +182,7 @@
 
             // Initialize map
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 13,
+                zoom: 16, // Closer zoom for navigation
                 center: mapCenter,
                 mapTypeControl: false,
                 streetViewControl: false,
@@ -176,7 +193,8 @@
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
                 draggable: false,
-                panel: null
+                panel: null,
+                suppressMarkers: false // Show turn markers
             });
             directionsRenderer.setMap(map);
 
@@ -206,85 +224,102 @@
                 });
             });
 
-            // Auto-route to first stop if location provided
+            // Listen for location updates from Draftbit
+            setupLocationListener();
+
+            // Auto-create route and enable navigation for testing
             if (userLocation) {
-                setTimeout(() => routeToNextStop(), 1500);
+                setTimeout(() => {
+                    forceCreateRoute(); // Create test route
+                }, 1500);
             }
         }
 
-        function routeToNextStop() {
-            console.log("=== routeToNextStop() called ===");
-            
-            if (!userLocation) {
-                updateStatus("❌ No location available. Add ?lat=34.0522&lng=-118.2437 to URL");
-                console.log("No user location");
-                return;
-            }
-            console.log("User location:", userLocation);
-
-            if (currentStopIndex >= stops.length) {
-                updateStatus("🎉 Tour complete! You've visited all stops.");
-                document.getElementById('destination-info').innerHTML = '';
-                return;
-            }
-
-            const nextStop = stops[currentStopIndex];
-            console.log("Next stop:", nextStop);
-            updateStatus(`🗺️ Getting route to: ${nextStop.name} (${currentStopIndex + 1}/${stops.length})`);
-            
-            // Update destination info
-            document.getElementById('destination-info').innerHTML = `
-                <strong>Next Stop:</strong> ${nextStop.name}<br>
-                <strong>Coordinates:</strong> ${nextStop.lat.toFixed(4)}, ${nextStop.lng.toFixed(4)}
-            `;
-
-            const request = {
-                origin: userLocation,
-                destination: { lat: nextStop.lat, lng: nextStop.lng },
-                travelMode: google.maps.TravelMode.DRIVING,
-                avoidTolls: false,
-                avoidHighways: false
-            };
-            
-            console.log("Making directions request:", request);
-
-            directionsService.route(request, (result, status) => {
-                console.log("=== Directions callback ===");
-                console.log("Status:", status);
-                console.log("Result:", result);
-                
-                if (status === 'OK') {
-                    directionsRenderer.setDirections(result);
-                    currentRoute = result;
-                    console.log("✅ Route stored successfully:", currentRoute);
+        // Listen for location updates from Draftbit
+        function setupLocationListener() {
+            window.addEventListener('message', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
                     
-                    const route = result.routes[0];
-                    const leg = route.legs[0];
-                    const steps = leg.steps;
-                    console.log("Number of steps:", steps.length);
-                    
-                    updateStatus(`✅ Route found: ${leg.distance.text}, ${leg.duration.text}`);
-                    
-                    // Update destination info with route details
-                    document.getElementById('destination-info').innerHTML = `
-                        <strong>Next Stop:</strong> ${nextStop.name}<br>
-                        <strong>Distance:</strong> ${leg.distance.text}<br>
-                        <strong>Duration:</strong> ${leg.duration.text}<br>
-                        <em>Click "Start Navigation" for turn-by-turn directions</em>
-                    `;
-                    
-                    // Enable navigation button
-                    document.getElementById('nav-button').disabled = false;
-                    console.log("Navigation button enabled");
-                } else {
-                    console.error('❌ Directions request failed with status:', status);
-                    updateStatus(`❌ Directions failed: ${status}. Try "Force Create Test Route"`);
-                    document.getElementById('nav-button').disabled = true;
+                    if (data.type === 'locationUpdate') {
+                        handleLocationUpdate(data.latitude, data.longitude);
+                    }
+                } catch (e) {
+                    // Not a JSON message, ignore
                 }
             });
+            
+            console.log("✅ Location listener setup - ready for Draftbit updates");
+            updateStatus("🔄 Ready to receive location updates from Draftbit");
         }
 
-        // Force create a test route (bypasses Google API)
+        // Handle location updates from Draftbit
+        function handleLocationUpdate(lat, lng) {
+            console.log("📍 Location update received:", lat, lng);
+            
+            const newLocation = { lat: lat, lng: lng };
+            userLocation = newLocation;
+            
+            // Update user marker position
+            updateUserMarker();
+            
+            // Keep map centered on user (optional - can be toggled)
+            if (isNavigating) {
+                map.setCenter(userLocation);
+            }
+            
+            // Check navigation progress if we're navigating
+            if (isNavigating && currentRoute) {
+                checkNavigationProgress();
+            }
+            
+            // Update status with current location
+            updateStatus(`📍 Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        }
+
+        // Check if user has reached the next navigation step
+        function checkNavigationProgress() {
+            if (!currentRoute || !isNavigating || !userLocation) return;
+            
+            const steps = currentRoute.routes[0].legs[0].steps;
+            if (currentStepIndex >= steps.length) return;
+            
+            const currentStep = steps[currentStepIndex];
+            const stepEndLocation = currentStep.end_location;
+            
+            // For real Google API results, use lat() and lng() functions
+            let stepEndLat, stepEndLng;
+            if (typeof stepEndLocation.lat === 'function') {
+                stepEndLat = stepEndLocation.lat();
+                stepEndLng = stepEndLocation.lng();
+            } else {
+                // For our test route
+                stepEndLat = stepEndLocation.lat;
+                stepEndLng = stepEndLocation.lng;
+            }
+            
+            // Calculate distance to end of current step
+            const distance = calculateDistance(
+                userLocation.lat, userLocation.lng,
+                stepEndLat, stepEndLng
+            );
+            
+            console.log(`Distance to next turn: ${(distance * 1000).toFixed(0)}m`);
+            
+            // If within 30 meters of step end, move to next step
+            if (distance < 0.03) { // 30 meters in km
+                console.log("🎯 Reached waypoint! Advancing to next step");
+                currentStepIndex++;
+                updateNavigationPanel();
+                
+                // Play a notification sound or vibration here if possible
+                if (currentStepIndex < steps.length) {
+                    updateStatus("✅ Step completed! Next instruction loaded.");
+                }
+            }
+        }
+
+        // Force create a test route (bypasses Google API) - for testing
         function forceCreateRoute() {
             console.log("=== FORCE CREATE ROUTE ===");
             
@@ -295,7 +330,7 @@
             
             const nextStop = stops[currentStopIndex];
             
-            // Create a fake route object for testing
+            // Create a fake route object for testing with realistic waypoints
             currentRoute = {
                 routes: [{
                     legs: [{
@@ -305,37 +340,41 @@
                             {
                                 instructions: "Head <b>north</b> on your current street",
                                 distance: { text: "0.3 mi", value: 482 },
-                                duration: { text: "1 min", value: 60 }
+                                duration: { text: "1 min", value: 60 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.003, 
+                                    lng: userLocation.lng 
+                                }
                             },
                             {
                                 instructions: "Turn <b>right</b> onto <b>Hollywood Blvd</b>",
                                 distance: { text: "2.1 mi", value: 3379 },
-                                duration: { text: "5 mins", value: 300 }
+                                duration: { text: "5 mins", value: 300 },
+                                end_location: { 
+                                    lat: userLocation.lat + 0.006, 
+                                    lng: userLocation.lng + 0.01 
+                                }
                             },
                             {
                                 instructions: "Continue <b>straight</b> to reach Hollywood Sign",
                                 distance: { text: "2.8 mi", value: 4506 },
-                                duration: { text: "6 mins", value: 360 }
+                                duration: { text: "6 mins", value: 360 },
+                                end_location: { 
+                                    lat: nextStop.lat, 
+                                    lng: nextStop.lng 
+                                }
                             }
                         ]
                     }]
                 }]
             };
             
-            console.log("✅ Fake route created:", currentRoute);
+            console.log("✅ Test route created:", currentRoute);
             
             // Enable navigation button
             document.getElementById('nav-button').disabled = false;
             
-            updateStatus(`✅ Test route created to ${nextStop.name}! Now try "Start Navigation"`);
-            
-            // Update destination info
-            document.getElementById('destination-info').innerHTML = `
-                <strong>Next Stop:</strong> ${nextStop.name} (TEST ROUTE)<br>
-                <strong>Distance:</strong> 5.2 mi<br>
-                <strong>Duration:</strong> 12 mins<br>
-                <em>⚡ This is a test route. Click "Start Navigation"!</em>
-            `;
+            updateStatus(`✅ Ready to navigate to ${nextStop.name}`);
         }
 
         // Start in-app turn-by-turn navigation
@@ -344,7 +383,7 @@
             console.log("currentRoute exists:", !!currentRoute);
             
             if (!currentRoute) {
-                updateStatus("❌ No route! Click 'Show Route' or 'Force Create Test Route' first");
+                updateStatus("❌ No route available");
                 return;
             }
 
@@ -353,55 +392,23 @@
             isNavigating = true;
             currentStepIndex = 0;
             
-            // Show navigation panel
+            // Hide controls and show navigation panel
+            document.getElementById('controls').style.display = 'none';
             document.getElementById('navigation-panel').style.display = 'block';
-            document.getElementById('nav-button').textContent = '🧭 Navigating...';
-            document.getElementById('nav-button').disabled = true;
+            
+            // Set closer zoom for navigation
+            if (userLocation) {
+                map.setCenter(userLocation);
+                map.setZoom(18);
+            }
             
             console.log("Navigation panel should now be visible");
             
             // Show first instruction immediately
             updateNavigationPanel();
             
-            updateStatus("🧭 Navigation started! Follow directions below.");
-            
-            // Add manual navigation controls (since location tracking often fails in WebView)
-            addManualNavigationControls();
-        }
-
-        function addManualNavigationControls() {
-            // Add next step button for manual progression
-            const existingControls = document.getElementById('manual-controls');
-            if (existingControls) {
-                existingControls.remove();
-            }
-            
-            const manualControls = document.createElement('div');
-            manualControls.id = 'manual-controls';
-            manualControls.style.textAlign = 'center';
-            manualControls.style.marginTop = '10px';
-            manualControls.innerHTML = `
-                <button onclick="nextNavigationStep()" style="background: #FF9800; width: 140px; padding: 10px; margin: 5px;">
-                    ✅ Completed This Step
-                </button>
-            `;
-            document.getElementById('navigation-panel').appendChild(manualControls);
-        }
-
-        function nextNavigationStep() {
-            if (!isNavigating || !currentRoute) return;
-            
-            const steps = currentRoute.routes[0].legs[0].steps;
-            currentStepIndex++;
-            
-            if (currentStepIndex >= steps.length) {
-                // Navigation complete
-                stopNavigation();
-                updateStatus("🎉 You have arrived at your destination!");
-                return;
-            }
-            
-            updateNavigationPanel();
+            // No manual controls needed for testing - will use real GPS
+            console.log("🧭 LIVE Navigation started - GPS tracking active");
         }
 
         function updateNavigationPanel() {
@@ -429,7 +436,7 @@
             
             // Current instruction (remove HTML tags)
             const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-            document.getElementById('current-instruction').textContent = `${currentStepIndex + 1}. ${instruction}`;
+            document.getElementById('current-instruction').textContent = instruction;
             
             // Distance and time for this step
             document.getElementById('step-distance').textContent = currentStep.distance.text;
@@ -448,9 +455,9 @@
             // Next instruction
             if (nextStep) {
                 const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
-                document.getElementById('next-instruction').textContent = `Next: ${nextInstruction}`;
+                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction}`;
             } else {
-                document.getElementById('next-instruction').textContent = "Next: You will arrive at your destination";
+                document.getElementById('next-instruction').textContent = "Then: You will arrive at your destination";
             }
             
             console.log("Navigation panel updated successfully");
@@ -462,18 +469,17 @@
             isNavigating = false;
             currentStepIndex = 0;
             
-            // Hide navigation panel
+            // Hide navigation panel and show controls
             document.getElementById('navigation-panel').style.display = 'none';
-            document.getElementById('nav-button').textContent = '🧭 Start Navigation';
+            document.getElementById('controls').style.display = 'block';
             document.getElementById('nav-button').disabled = false;
             
-            // Remove manual controls if they exist
-            const manualControls = document.getElementById('manual-controls');
-            if (manualControls) {
-                manualControls.remove();
+            // Zoom out to overview
+            if (userLocation) {
+                map.setZoom(14);
             }
             
-            updateStatus("🛑 Navigation stopped");
+            updateStatus("Navigation ended");
         }
 
         function goToNextStop() {
@@ -496,19 +502,29 @@
                 userMarker.setMap(null);
             }
             
+            // Create animated location dot
             userMarker = new google.maps.Marker({
                 position: userLocation,
                 map: map,
                 title: "Your Location",
                 icon: {
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="10" cy="10" r="8" fill="#34A853" stroke="white" stroke-width="2"/>
-                            <circle cx="10" cy="10" r="3" fill="white"/>
+                        <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Outer pulsing ring -->
+                            <circle cx="20" cy="20" r="18" fill="rgba(0,122,255,0.2)">
+                                <animate attributeName="r" values="18;22;18" dur="2s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite"/>
+                            </circle>
+                            <!-- Middle ring -->
+                            <circle cx="20" cy="20" r="12" fill="rgba(0,122,255,0.3)" stroke="white" stroke-width="2"/>
+                            <!-- Inner dot -->
+                            <circle cx="20" cy="20" r="6" fill="#007AFF" stroke="white" stroke-width="2">
+                                <animate attributeName="r" values="6;7;6" dur="2s" repeatCount="indefinite"/>
+                            </circle>
                         </svg>
                     `),
-                    scaledSize: new google.maps.Size(20, 20),
-                    anchor: new google.maps.Point(10, 10)
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 20)
                 }
             });
         }
@@ -561,6 +577,18 @@
 
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
+        }
+
+        // Calculate distance between two points in kilometers
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
         }
     </script>
 
