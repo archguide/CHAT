@@ -66,7 +66,7 @@
         }
 
         #current-nav-content {
-            padding: 20px 20px 16px 20px;
+            padding: 12px 20px 12px 20px;
         }
 
         #current-instruction {
@@ -227,6 +227,8 @@
         let routeSteps = [];
         let locationHistory = [];
         let smoothedLocation = null;
+        let lastMarkerUpdate = 0;
+        let isOffRoute = false;
         
         // Simple destination
         const destination = { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215 };
@@ -311,15 +313,14 @@
                 title: destination.name,
                 icon: {
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg width="14" height="22" viewBox="0 0 14 22" xmlns="http://www.w3.org/2000/svg">
-                            <ellipse cx="7" cy="20" rx="3" ry="1" fill="rgba(0,0,0,0.2)"/>
-                            <ellipse cx="7" cy="6" rx="5" ry="6" fill="#EA4335"/>
-                            <path d="M7 12 L4 18 L10 18 Z" fill="#EA4335"/>
-                            <circle cx="7" cy="6" r="2.5" fill="white"/>
+                        <svg width="24" height="30" viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="12" cy="28" rx="6" ry="1.5" fill="rgba(0,0,0,0.2)"/>
+                            <path d="M12 0C5.4 0 0 5.4 0 12c0 6.6 12 18 12 18s12-11.4 12-18C24 5.4 18.6 0 12 0z" fill="#0f52ba"/>
+                            <circle cx="12" cy="12" r="7" fill="white"/>
                         </svg>
                     `),
-                    scaledSize: new google.maps.Size(14, 22),
-                    anchor: new google.maps.Point(7, 22)
+                    scaledSize: new google.maps.Size(24, 30),
+                    anchor: new google.maps.Point(12, 30)
                 }
             });
         }
