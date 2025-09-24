@@ -66,21 +66,21 @@
         }
 
         #current-nav-content {
-            padding: 12px 20px 12px 20px;
+            padding: 24px 24px 20px 24px;
         }
 
         #current-instruction {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             color: #100c08;
-            line-height: 1.3;
+            line-height: 1.2;
         }
         
         #distance-time {
-            font-size: 14px;
+            font-size: 16px;
             color: #666;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             font-weight: 500;
             display: flex;
             justify-content: space-between;
@@ -284,26 +284,43 @@
         }
 
         function updateUserMarker() {
+            // Only update marker if location changed significantly or it's been a while
+            const now = Date.now();
+            const timeSinceMarkerUpdate = now - lastMarkerUpdate;
+            
+            const shouldUpdateMarker = !userMarker || 
+                timeSinceMarkerUpdate > 3000 || // Force update every 3 seconds
+                (smoothedLocation && calculateDistance(
+                    userMarker.getPosition().lat(), 
+                    userMarker.getPosition().lng(), 
+                    userLocation.lat, 
+                    userLocation.lng
+                ) > 0.001); // Only if moved more than ~1 meter
+            
+            if (!shouldUpdateMarker) return;
+            
             if (userMarker) {
-                userMarker.setMap(null);
+                userMarker.setPosition(userLocation);
+            } else {
+                userMarker = new google.maps.Marker({
+                    position: userLocation,
+                    map: map,
+                    title: "Your Location",
+                    zIndex: 1000,
+                    icon: {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+                                <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
+                            </svg>
+                        `),
+                        scaledSize: new google.maps.Size(20, 20),
+                        anchor: new google.maps.Point(10, 10)
+                    }
+                });
             }
             
-            userMarker = new google.maps.Marker({
-                position: userLocation,
-                map: map,
-                title: "Your Location",
-                zIndex: 1000,
-                icon: {
-                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
-                            <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
-                        </svg>
-                    `),
-                    scaledSize: new google.maps.Size(20, 20),
-                    anchor: new google.maps.Point(10, 10)
-                }
-            });
+            lastMarkerUpdate = now;
         }
 
         function addDestinationMarker() {
@@ -364,6 +381,7 @@
                             
                             if (isNavigating) {
                                 map.panTo(userLocation);
+                                checkIfOffRoute(); // Check if we need to reroute
                                 checkNavigationProgress();
                                 updateDistanceCountdown();
                             }
@@ -542,7 +560,9 @@
             
             // Current instruction
             const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-            document.getElementById('current-instruction').textContent = instruction;
+            const instructionElement = document.getElementById('current-instruction');
+            instructionElement.textContent = instruction;
+            instructionElement.style.color = "#100c08"; // Reset color in case it was changed by rerouting
             
             // Distance to current step
             updateDistanceCountdown();
@@ -638,6 +658,85 @@
             }
             
             document.getElementById('step-distance').textContent = distanceText;
+        }
+
+        function checkIfOffRoute() {
+            if (!isNavigating || !currentRoute || !userLocation || isOffRoute) return;
+            
+            const routePath = currentRoute.routes[0].overview_path;
+            if (!routePath || routePath.length === 0) return;
+            
+            // Find minimum distance to the route path
+            let minDistanceToRoute = Infinity;
+            routePath.forEach(point => {
+                let lat, lng;
+                if (typeof point.lat === 'function') {
+                    lat = point.lat();
+                    lng = point.lng();
+                } else {
+                    lat = point.lat;
+                    lng = point.lng;
+                }
+                
+                const distance = calculateDistance(
+                    userLocation.lat, userLocation.lng,
+                    lat, lng
+                );
+                
+                minDistanceToRoute = Math.min(minDistanceToRoute, distance);
+            });
+            
+            // If user is more than 100 meters from the route, trigger reroute
+            if (minDistanceToRoute > 0.1) { // 100 meters
+                console.log(`🔄 Off route by ${(minDistanceToRoute * 1000).toFixed(0)}m - rerouting...`);
+                isOffRoute = true;
+                
+                // Show rerouting message
+                const instructionElement = document.getElementById('current-instruction');
+                if (instructionElement) {
+                    instructionElement.textContent = "🔄 Rerouting...";
+                    instructionElement.style.color = "#FF9500";
+                }
+                
+                // Request new route
+                requestReroute();
+            }
+        }
+
+        function requestReroute() {
+            const request = {
+                origin: userLocation,
+                destination: { lat: destination.lat, lng: destination.lng },
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+            
+            directionsService.route(request, (result, status) => {
+                if (status === 'OK') {
+                    currentRoute = result;
+                    routeSteps = result.routes[0].legs[0].steps;
+                    directionsRenderer.setDirections(result);
+                    
+                    // Reset to first step of new route
+                    currentStepIndex = 0;
+                    isOffRoute = false;
+                    
+                    // Update navigation with new route
+                    updateNavigationPanel();
+                    updateBottomBar();
+                    
+                    console.log("✅ Reroute successful");
+                } else {
+                    console.log("❌ Reroute failed, continuing with original route");
+                    isOffRoute = false;
+                    
+                    // Reset instruction display
+                    const instructionElement = document.getElementById('current-instruction');
+                    if (instructionElement) {
+                        instructionElement.style.color = "#100c08";
+                        updateNavigationPanel();
+                    }
+                }
+            });
         }
 
         function checkNavigationProgress() {
