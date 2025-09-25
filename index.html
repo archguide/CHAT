@@ -51,7 +51,7 @@
             z-index: 1000;
             background: #FAFAFA;
             color: #100c08;
-            max-height: 70px;
+            max-height: 100px;
             overflow: hidden;
             box-shadow: 0 2px 20px rgba(0,0,0,0.1);
             border-bottom-left-radius: 16px;
@@ -66,31 +66,57 @@
         }
 
         #current-nav-content {
-            padding: 24px 24px 20px 24px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
-        #current-instruction {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #100c08;
-            line-height: 1.2;
-        }
-        
-        #distance-time {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 6px;
-            font-weight: 500;
+        #direction-icon {
+            width: 44px;
+            height: 44px;
+            background: #0f52ba;
+            border-radius: 8px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
-        
+
+        #direction-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
+        }
+
+        #instruction-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        #distance-large {
+            font-size: 28px;
+            font-weight: 800;
+            color: #100c08;
+            line-height: 1.1;
+            margin-bottom: 2px;
+        }
+
+        #street-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #666;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Hide old elements */
+        #current-instruction,
+        #distance-time,
         #next-instruction {
-            font-size: 12px;
-            color: #888;
-            font-weight: 400;
+            display: none;
         }
 
         #all-directions {
@@ -225,9 +251,6 @@
         let destinationMarker = null;
         let lastLocationUpdate = 0;
         let routeSteps = [];
-        let locationHistory = [];
-        let smoothedLocation = null;
-        let lastMarkerUpdate = 0;
         let isOffRoute = false;
         
         // Simple destination
@@ -276,51 +299,37 @@
             directionsRenderer.setMap(map);
 
             // Add markers
-            updateUserMarker();
+            updateUserMarkerSmooth();
             addDestinationMarker();
             
             // Start location tracking
             startLocationTracking();
         }
 
-        function updateUserMarker() {
-            // Only update marker if location changed significantly or it's been a while
-            const now = Date.now();
-            const timeSinceMarkerUpdate = now - lastMarkerUpdate;
-            
-            const shouldUpdateMarker = !userMarker || 
-                timeSinceMarkerUpdate > 3000 || // Force update every 3 seconds
-                (smoothedLocation && calculateDistance(
-                    userMarker.getPosition().lat(), 
-                    userMarker.getPosition().lng(), 
-                    userLocation.lat, 
-                    userLocation.lng
-                ) > 0.001); // Only if moved more than ~1 meter
-            
-            if (!shouldUpdateMarker) return;
-            
+        function updateUserMarkerSmooth() {
             if (userMarker) {
+                // Smooth position update instead of recreating marker
                 userMarker.setPosition(userLocation);
             } else {
+                // Only create marker once
                 userMarker = new google.maps.Marker({
                     position: userLocation,
                     map: map,
                     title: "Your Location",
                     zIndex: 1000,
+                    optimized: false, // Disable optimization for smoother updates
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
-                                <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
+                            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+                                <circle cx="12" cy="12" r="8" fill="#0f52ba"/>
                             </svg>
                         `),
-                        scaledSize: new google.maps.Size(20, 20),
-                        anchor: new google.maps.Point(10, 10)
+                        scaledSize: new google.maps.Size(24, 24),
+                        anchor: new google.maps.Point(12, 12)
                     }
                 });
             }
-            
-            lastMarkerUpdate = now;
         }
 
         function addDestinationMarker() {
@@ -345,86 +354,91 @@
         function startLocationTracking() {
             if (!navigator.geolocation) return;
             
-            const trackLocation = () => {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const newLocation = { 
-                            lat: position.coords.latitude, 
-                            lng: position.coords.longitude,
-                            accuracy: position.coords.accuracy,
-                            timestamp: position.timestamp
-                        };
+            // Use watchPosition instead of intervals - much more stable and accurate
+            const watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const newLocation = { 
+                        lat: position.coords.latitude, 
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        timestamp: position.timestamp,
+                        speed: position.coords.speed || 0
+                    };
+                    
+                    // Aggressive accuracy filtering to prevent building jumping
+                    if (newLocation.accuracy > 25) return; // Only accept very accurate readings
+                    
+                    // Road snapping logic - reject locations that are too far from previous if moving slowly
+                    if (userLocation && newLocation.speed < 5) { // If moving less than 5 m/s (slow/walking)
+                        const distanceFromLast = calculateDistance(
+                            userLocation.lat, userLocation.lng, 
+                            newLocation.lat, newLocation.lng
+                        );
                         
-                        // Filter out low accuracy readings
-                        if (newLocation.accuracy > 50) return;
-                        
-                        // Add to location history for smoothing
-                        locationHistory.push(newLocation);
-                        if (locationHistory.length > 5) {
-                            locationHistory.shift(); // Keep only last 5 readings
+                        // If jumped more than 50 meters while moving slowly, likely GPS error
+                        if (distanceFromLast > 0.05) {
+                            console.log("GPS jump detected, filtering out");
+                            return;
                         }
-                        
-                        // Calculate smoothed location using weighted average
-                        const smoothed = calculateSmoothedLocation();
-                        
-                        // Only update if location changed significantly or it's been a while
-                        const timeSinceUpdate = Date.now() - lastLocationUpdate;
-                        const shouldUpdate = !userLocation || 
-                            calculateDistance(userLocation.lat, userLocation.lng, smoothed.lat, smoothed.lng) > 0.0005 ||
-                            timeSinceUpdate > 2000; // Force update every 2 seconds
-                        
-                        if (shouldUpdate) {
-                            userLocation = smoothed;
-                            smoothedLocation = smoothed;
-                            updateUserMarker();
-                            lastLocationUpdate = Date.now();
-                            
-                            if (isNavigating) {
-                                map.panTo(userLocation);
-                                checkIfOffRoute(); // Check if we need to reroute
-                                checkNavigationProgress();
-                                updateDistanceCountdown();
-                            }
-                        }
-                    },
-                    (error) => console.log("Location error:", error.message),
-                    { 
-                        enableHighAccuracy: true, 
-                        timeout: 3000, 
-                        maximumAge: 100 // Use very fresh data
                     }
-                );
-            };
+                    
+                    // Only update if this is a significant improvement or change
+                    if (!userLocation || newLocation.accuracy < 15 || 
+                        calculateDistance(userLocation.lat, userLocation.lng, newLocation.lat, newLocation.lng) > 0.003) {
+                        
+                        userLocation = newLocation;
+                        updateUserMarkerSmooth();
+                        lastLocationUpdate = Date.now();
+                        
+                        if (isNavigating) {
+                            // Smooth pan to location without jarring jumps
+                            map.panTo(userLocation);
+                            checkIfOffRoute();
+                            checkNavigationProgress();
+                            updateDistanceCountdown();
+                        }
+                    }
+                },
+                (error) => {
+                    console.log("Location error:", error.message);
+                    // Fallback to less accurate but more stable tracking
+                    setTimeout(startLocationTracking, 5000);
+                },
+                { 
+                    enableHighAccuracy: true,
+                    timeout: 10000, // Shorter timeout for faster response
+                    maximumAge: 1000 // Use fresh data
+                }
+            );
             
-            trackLocation();
-            // For Draftbit: You can remove the 0.5s wait and update continuously
-            // More frequent updates = smoother tracking
-            setInterval(trackLocation, 250); // Update every 250ms for very smooth tracking
+            // Store watchId to clear later if needed
+            window.locationWatchId = watchId;
         }
 
-        function calculateSmoothedLocation() {
-            if (locationHistory.length === 0) return userLocation;
-            if (locationHistory.length === 1) return locationHistory[0];
-            
-            // Weighted average with more recent locations having higher weight
-            let totalWeight = 0;
-            let weightedLat = 0;
-            let weightedLng = 0;
-            
-            locationHistory.forEach((loc, index) => {
-                const weight = index + 1; // More recent = higher weight
-                const accuracyWeight = Math.max(0.1, 1 / (loc.accuracy + 1)); // Better accuracy = higher weight
-                const finalWeight = weight * accuracyWeight;
-                
-                weightedLat += loc.lat * finalWeight;
-                weightedLng += loc.lng * finalWeight;
-                totalWeight += finalWeight;
-            });
-            
-            return {
-                lat: weightedLat / totalWeight,
-                lng: weightedLng / totalWeight
-            };
+        function updateUserMarkerSmooth() {
+            if (userMarker) {
+                // Smooth position update instead of recreating marker
+                userMarker.setPosition(userLocation);
+            } else {
+                // Only create marker once
+                userMarker = new google.maps.Marker({
+                    position: userLocation,
+                    map: map,
+                    title: "Your Location",
+                    zIndex: 1000,
+                    optimized: false, // Disable optimization for smoother updates
+                    icon: {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+                                <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
+                            </svg>
+                        `),
+                        scaledSize: new google.maps.Size(20, 20),
+                        anchor: new google.maps.Point(10, 10)
+                    }
+                });
+            }
         }
 
         function forceCreateRoute() {
@@ -510,6 +524,15 @@
             navPanel.onclick = toggleDirectionsPanel;
             navPanel.innerHTML = `
                 <div id="current-nav-content">
+                    <div id="direction-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M7 14l5-5 5 5z"/>
+                        </svg>
+                    </div>
+                    <div id="instruction-content">
+                        <div id="distance-large"></div>
+                        <div id="street-name"></div>
+                    </div>
                     <div id="current-instruction"></div>
                     <div id="distance-time">
                         <span id="step-distance"></span>
@@ -556,24 +579,47 @@
             }
             
             const currentStep = routeSteps[currentStepIndex];
-            const nextStep = currentStepIndex + 1 < routeSteps.length ? routeSteps[currentStepIndex + 1] : null;
             
-            // Current instruction
-            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-            const instructionElement = document.getElementById('current-instruction');
-            instructionElement.textContent = instruction;
-            instructionElement.style.color = "#100c08"; // Reset color in case it was changed by rerouting
-            
-            // Distance to current step
+            // Update distance in large format
             updateDistanceCountdown();
             
-            // Next instruction
-            if (nextStep) {
-                const nextInstruction = nextStep.instructions.replace(/<[^>]*>/g, '');
-                document.getElementById('next-instruction').textContent = `Then: ${nextInstruction.substring(0, 50)}${nextInstruction.length > 50 ? '...' : ''}`;
-            } else {
-                document.getElementById('next-instruction').textContent = `Then: Arrive at ${destination.name}`;
+            // Extract street name from instruction
+            const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
+            let streetName = instruction;
+            
+            // Try to extract just the street name
+            if (instruction.includes(' on ')) {
+                streetName = instruction.split(' on ')[1];
+            } else if (instruction.includes(' onto ')) {
+                streetName = instruction.split(' onto ')[1];
+            } else if (instruction.includes('Continue')) {
+                streetName = instruction.replace('Continue on ', '').replace('Continue ', '');
             }
+            
+            // Update street name
+            document.getElementById('street-name').textContent = streetName;
+            
+            // Update direction icon based on instruction
+            updateDirectionIcon(instruction);
+        }
+
+        function updateDirectionIcon(instruction) {
+            const iconElement = document.getElementById('direction-icon');
+            const svg = iconElement.querySelector('svg');
+            
+            let iconPath = '';
+            
+            if (instruction.toLowerCase().includes('left') || instruction.toLowerCase().includes('west')) {
+                iconPath = '<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>';
+            } else if (instruction.toLowerCase().includes('right') || instruction.toLowerCase().includes('east')) {
+                iconPath = '<path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/>';
+            } else if (instruction.toLowerCase().includes('continue') || instruction.toLowerCase().includes('straight')) {
+                iconPath = '<path d="M7 14l5-5 5 5z"/>';
+            } else {
+                iconPath = '<path d="M7 14l5-5 5 5z"/>';
+            }
+            
+            svg.innerHTML = iconPath;
         }
 
         function updateAllDirections() {
@@ -657,7 +703,17 @@
                 distanceText = `${distanceInMiles.toFixed(1)} mi`;
             }
             
-            document.getElementById('step-distance').textContent = distanceText;
+            // Update the large distance display
+            const distanceLargeElement = document.getElementById('distance-large');
+            if (distanceLargeElement) {
+                distanceLargeElement.textContent = distanceText;
+            }
+            
+            // Also update old element for compatibility
+            const stepDistanceElement = document.getElementById('step-distance');
+            if (stepDistanceElement) {
+                stepDistanceElement.textContent = distanceText;
+            }
         }
 
         function checkIfOffRoute() {
@@ -686,19 +742,21 @@
                 minDistanceToRoute = Math.min(minDistanceToRoute, distance);
             });
             
-            // If user is more than 100 meters from the route, trigger reroute
-            if (minDistanceToRoute > 0.1) { // 100 meters
+            // Faster rerouting - if user is more than 75 meters from the route, trigger reroute
+            if (minDistanceToRoute > 0.075) { // 75 meters (reduced from 100m)
                 console.log(`🔄 Off route by ${(minDistanceToRoute * 1000).toFixed(0)}m - rerouting...`);
                 isOffRoute = true;
                 
-                // Show rerouting message
-                const instructionElement = document.getElementById('current-instruction');
-                if (instructionElement) {
-                    instructionElement.textContent = "🔄 Rerouting...";
-                    instructionElement.style.color = "#FF9500";
+                // Show rerouting message in new format
+                const distanceElement = document.getElementById('distance-large');
+                const streetElement = document.getElementById('street-name');
+                if (distanceElement && streetElement) {
+                    distanceElement.textContent = "Rerouting";
+                    streetElement.textContent = "Finding new route...";
+                    distanceElement.style.color = "#FF9500";
                 }
                 
-                // Request new route
+                // Request new route immediately
                 requestReroute();
             }
         }
@@ -707,7 +765,9 @@
             const request = {
                 origin: userLocation,
                 destination: { lat: destination.lat, lng: destination.lng },
-                travelMode: google.maps.TravelMode.DRIVING
+                travelMode: google.maps.TravelMode.DRIVING,
+                avoidHighways: false, // Allow all route types for faster calculation
+                optimizeWaypoints: false // Disable optimization for speed
             };
             
             directionsService.route(request, (result, status) => {
@@ -724,15 +784,22 @@
                     updateNavigationPanel();
                     updateBottomBar();
                     
+                    // Reset colors
+                    const distanceElement = document.getElementById('distance-large');
+                    if (distanceElement) {
+                        distanceElement.style.color = "#100c08";
+                    }
+                    
                     console.log("✅ Reroute successful");
                 } else {
                     console.log("❌ Reroute failed, continuing with original route");
                     isOffRoute = false;
                     
-                    // Reset instruction display
-                    const instructionElement = document.getElementById('current-instruction');
-                    if (instructionElement) {
-                        instructionElement.style.color = "#100c08";
+                    // Reset display
+                    const distanceElement = document.getElementById('distance-large');
+                    const streetElement = document.getElementById('street-name');
+                    if (distanceElement && streetElement) {
+                        distanceElement.style.color = "#100c08";
                         updateNavigationPanel();
                     }
                 }
@@ -815,9 +882,16 @@
         }
 
         function showArrivalMessage() {
-            document.getElementById('current-instruction').textContent = "🎉 You have arrived!";
-            document.getElementById('step-distance').textContent = "";
-            document.getElementById('next-instruction').textContent = `Welcome to ${destination.name}!`;
+            const distanceElement = document.getElementById('distance-large');
+            const streetElement = document.getElementById('street-name');
+            
+            if (distanceElement && streetElement) {
+                distanceElement.textContent = "Arrived";
+                streetElement.textContent = `Welcome to ${destination.name}!`;
+                distanceElement.style.color = "#34A853"; // Green for arrival
+            }
+            
+            // Also update bottom bar
             document.getElementById('arrival-time').textContent = "Arrived";
             document.getElementById('remaining-stats').textContent = "Journey complete";
         }
