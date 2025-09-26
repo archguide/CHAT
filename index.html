@@ -10,7 +10,7 @@
             margin: 0; 
             padding: 0; 
             font-family: 'Gothic A1', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            color: #100c08;
+            color: #fafafa;
         }
         #map { height: 100vh; width: 100%; }
         
@@ -49,11 +49,11 @@
             left: 0;
             right: 0;
             z-index: 1000;
-            background: #FAFAFA;
-            color: #100c08;
+            background: #100c08;
+            color: #fafafa;
             max-height: 100px;
             overflow: hidden;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.3);
             border-bottom-left-radius: 16px;
             border-bottom-right-radius: 16px;
             transition: max-height 0.3s ease-in-out;
@@ -75,7 +75,7 @@
         #direction-icon {
             width: 44px;
             height: 44px;
-            background: #0f52ba;
+            background: transparent;
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -84,9 +84,9 @@
         }
 
         #direction-icon svg {
-            width: 24px;
-            height: 24px;
-            fill: white;
+            width: 32px;
+            height: 32px;
+            fill: #fafafa;
         }
 
         #instruction-content {
@@ -97,7 +97,7 @@
         #distance-large {
             font-size: 28px;
             font-weight: 800;
-            color: #100c08;
+            color: #fafafa;
             line-height: 1.1;
             margin-bottom: 2px;
         }
@@ -105,36 +105,30 @@
         #street-name {
             font-size: 18px;
             font-weight: 600;
-            color: #666;
+            color: #999;
             line-height: 1.2;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        /* Hide old elements */
-        #current-instruction,
-        #distance-time,
-        #next-instruction {
-            display: none;
-        }
-
         #all-directions {
             padding: 0 20px 20px 20px;
             max-height: 320px;
             overflow-y: auto;
+            background: #100c08;
         }
 
         .direction-step {
             padding: 12px 0;
-            border-bottom: 1px solid rgba(16, 12, 8, 0.1);
+            border-bottom: 1px solid rgba(250, 250, 250, 0.1);
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
         .direction-step.current {
-            background: rgba(15, 82, 186, 0.1);
+            background: rgba(15, 82, 186, 0.2);
             margin: 0 -20px;
             padding: 12px 20px;
             border-radius: 8px;
@@ -162,11 +156,12 @@
             flex: 1;
             font-size: 14px;
             line-height: 1.4;
+            color: #fafafa;
         }
 
         .step-distance {
             font-size: 12px;
-            color: #666;
+            color: #999;
             font-weight: 500;
         }
 
@@ -176,10 +171,10 @@
             left: 0;
             right: 0;
             z-index: 1000;
-            background: #FAFAFA;
-            color: #100c08;
+            background: #100c08;
+            color: #fafafa;
             padding: 16px 20px;
-            box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 -2px 20px rgba(0,0,0,0.3);
             border-top-left-radius: 16px;
             border-top-right-radius: 16px;
             display: flex;
@@ -197,12 +192,12 @@
         #arrival-time {
             font-size: 16px;
             font-weight: 700;
-            color: #100c08;
+            color: #fafafa;
         }
 
         #remaining-stats {
             font-size: 12px;
-            color: #666;
+            color: #999;
             font-weight: 500;
         }
 
@@ -229,8 +224,15 @@
             transform: translateX(-50%);
             width: 36px;
             height: 4px;
-            background: rgba(16, 12, 8, 0.2);
+            background: rgba(250, 250, 250, 0.3);
             border-radius: 2px;
+        }
+
+        /* Hide old elements */
+        #current-instruction,
+        #distance-time,
+        #next-instruction {
+            display: none;
         }
     </style>
 </head>
@@ -311,7 +313,7 @@
                 // Smooth position update instead of recreating marker
                 userMarker.setPosition(userLocation);
             } else {
-                // Only create marker once
+                // Only create marker once - Apple style with direction arrow
                 userMarker = new google.maps.Marker({
                     position: userLocation,
                     map: map,
@@ -355,7 +357,7 @@
         function startLocationTracking() {
             if (!navigator.geolocation) return;
             
-            // Use watchPosition instead of intervals - much more stable and accurate
+            // Use watchPosition for stable tracking like Apple Maps
             const watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     const newLocation = { 
@@ -414,32 +416,6 @@
             
             // Store watchId to clear later if needed
             window.locationWatchId = watchId;
-        }
-
-        function updateUserMarkerSmooth() {
-            if (userMarker) {
-                // Smooth position update instead of recreating marker
-                userMarker.setPosition(userLocation);
-            } else {
-                // Only create marker once
-                userMarker = new google.maps.Marker({
-                    position: userLocation,
-                    map: map,
-                    title: "Your Location",
-                    zIndex: 1000,
-                    optimized: false, // Disable optimization for smoother updates
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="10" cy="10" r="9" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
-                                <circle cx="10" cy="10" r="6" fill="#0f52ba"/>
-                            </svg>
-                        `),
-                        scaledSize: new google.maps.Size(20, 20),
-                        anchor: new google.maps.Point(10, 10)
-                    }
-                });
-            }
         }
 
         function forceCreateRoute() {
@@ -788,13 +764,13 @@
                 console.log(`🔄 Off route by ${(minDistanceToRoute * 1000).toFixed(0)}m - rerouting...`);
                 isOffRoute = true;
                 
-                // Show rerouting message in new format
+                // Show rerouting message in new black format
                 const distanceElement = document.getElementById('distance-large');
                 const streetElement = document.getElementById('street-name');
                 if (distanceElement && streetElement) {
                     distanceElement.textContent = "Rerouting";
                     streetElement.textContent = "Finding new route...";
-                    distanceElement.style.color = "#FF9500";
+                    distanceElement.style.color = "#FF9500"; // Orange for rerouting
                 }
                 
                 // Request new route immediately
@@ -941,51 +917,6 @@
             // Also update bottom bar
             document.getElementById('arrival-time').textContent = "Arrived";
             document.getElementById('remaining-stats').textContent = "Journey complete";
-        }
-
-        function checkIfOffRoute() {
-            if (!isNavigating || !currentRoute || !userLocation || isOffRoute) return;
-            
-            const routePath = currentRoute.routes[0].overview_path;
-            if (!routePath || routePath.length === 0) return;
-            
-            // Find minimum distance to the route path
-            let minDistanceToRoute = Infinity;
-            routePath.forEach(point => {
-                let lat, lng;
-                if (typeof point.lat === 'function') {
-                    lat = point.lat();
-                    lng = point.lng();
-                } else {
-                    lat = point.lat;
-                    lng = point.lng;
-                }
-                
-                const distance = calculateDistance(
-                    userLocation.lat, userLocation.lng,
-                    lat, lng
-                );
-                
-                minDistanceToRoute = Math.min(minDistanceToRoute, distance);
-            });
-            
-            // Faster rerouting - if user is more than 75 meters from the route, trigger reroute
-            if (minDistanceToRoute > 0.075) { // 75 meters (reduced from 100m)
-                console.log(`🔄 Off route by ${(minDistanceToRoute * 1000).toFixed(0)}m - rerouting...`);
-                isOffRoute = true;
-                
-                // Show rerouting message in new black format
-                const distanceElement = document.getElementById('distance-large');
-                const streetElement = document.getElementById('street-name');
-                if (distanceElement && streetElement) {
-                    distanceElement.textContent = "Rerouting";
-                    streetElement.textContent = "Finding new route...";
-                    distanceElement.style.color = "#FF9500"; // Orange for rerouting
-                }
-                
-                // Request new route immediately
-                requestReroute();
-            }
         }
 
         function stopNavigation() {
