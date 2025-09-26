@@ -320,13 +320,14 @@
                     optimized: false, // Disable optimization for smoother updates
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="12" r="11" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
-                                <circle cx="12" cy="12" r="8" fill="#0f52ba"/>
+                            <svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="14" cy="14" r="13" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+                                <circle cx="14" cy="14" r="10" fill="#0f52ba"/>
+                                <path d="M14 6 L18 12 L16 12 L16 18 L12 18 L12 12 L10 12 Z" fill="white"/>
                             </svg>
                         `),
-                        scaledSize: new google.maps.Size(24, 24),
-                        anchor: new google.maps.Point(12, 12)
+                        scaledSize: new google.maps.Size(28, 28),
+                        anchor: new google.maps.Point(14, 14)
                     }
                 });
             }
@@ -583,18 +584,9 @@
             // Update distance in large format
             updateDistanceCountdown();
             
-            // Extract street name from instruction
+            // Extract and clean street name from instruction
             const instruction = currentStep.instructions.replace(/<[^>]*>/g, '');
-            let streetName = instruction;
-            
-            // Try to extract just the street name
-            if (instruction.includes(' on ')) {
-                streetName = instruction.split(' on ')[1];
-            } else if (instruction.includes(' onto ')) {
-                streetName = instruction.split(' onto ')[1];
-            } else if (instruction.includes('Continue')) {
-                streetName = instruction.replace('Continue on ', '').replace('Continue ', '');
-            }
+            let streetName = extractCleanStreetName(instruction);
             
             // Update street name
             document.getElementById('street-name').textContent = streetName;
@@ -603,19 +595,68 @@
             updateDirectionIcon(instruction);
         }
 
+        function extractCleanStreetName(instruction) {
+            let streetName = instruction;
+            
+            // Remove common navigation phrases and landmarks
+            streetName = streetName
+                .replace(/^Continue on /i, '')
+                .replace(/^Continue /i, '')
+                .replace(/^Turn left on /i, '')
+                .replace(/^Turn right on /i, '')
+                .replace(/^Turn left onto /i, '')
+                .replace(/^Turn right onto /i, '')
+                .replace(/^Keep left on /i, '')
+                .replace(/^Keep right on /i, '')
+                .replace(/^Take the /i, '')
+                .replace(/^Head /i, '')
+                .replace(/^Proceed to /i, '');
+            
+            // Extract street name before any landmarks or additional info
+            if (streetName.includes(' toward ')) {
+                streetName = streetName.split(' toward ')[0];
+            }
+            if (streetName.includes(' for ')) {
+                streetName = streetName.split(' for ')[0];
+            }
+            if (streetName.includes(' past ')) {
+                streetName = streetName.split(' past ')[0];
+            }
+            if (streetName.includes(' after ')) {
+                streetName = streetName.split(' after ')[0];
+            }
+            if (streetName.includes(' before ')) {
+                streetName = streetName.split(' before ')[0];
+            }
+            if (streetName.includes(' then ')) {
+                streetName = streetName.split(' then ')[0];
+            }
+            
+            // Clean up any remaining directions or extra text
+            streetName = streetName
+                .replace(/ on the right/i, '')
+                .replace(/ on the left/i, '')
+                .replace(/ to stay on/i, '')
+                .replace(/ to continue on/i, '')
+                .trim();
+            
+            return streetName || instruction; // Fallback to original if cleaning failed
+        }
+
         function updateDirectionIcon(instruction) {
             const iconElement = document.getElementById('direction-icon');
             const svg = iconElement.querySelector('svg');
             
             let iconPath = '';
             
-            if (instruction.toLowerCase().includes('left') || instruction.toLowerCase().includes('west')) {
+            if (instruction.toLowerCase().includes('left')) {
+                // Simple left arrow
                 iconPath = '<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>';
-            } else if (instruction.toLowerCase().includes('right') || instruction.toLowerCase().includes('east')) {
+            } else if (instruction.toLowerCase().includes('right')) {
+                // Simple right arrow  
                 iconPath = '<path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/>';
-            } else if (instruction.toLowerCase().includes('continue') || instruction.toLowerCase().includes('straight')) {
-                iconPath = '<path d="M7 14l5-5 5 5z"/>';
             } else {
+                // Simple up arrow for straight/continue
                 iconPath = '<path d="M7 14l5-5 5 5z"/>';
             }
             
@@ -784,10 +825,16 @@
                     updateNavigationPanel();
                     updateBottomBar();
                     
+                    // IMPORTANT: Zoom back in to navigation level
+                    if (userLocation) {
+                        map.setCenter(userLocation);
+                        map.setZoom(18); // Back to navigation zoom level
+                    }
+                    
                     // Reset colors
                     const distanceElement = document.getElementById('distance-large');
                     if (distanceElement) {
-                        distanceElement.style.color = "#100c08";
+                        distanceElement.style.color = "#fafafa";
                     }
                     
                     console.log("✅ Reroute successful");
@@ -799,7 +846,7 @@
                     const distanceElement = document.getElementById('distance-large');
                     const streetElement = document.getElementById('street-name');
                     if (distanceElement && streetElement) {
-                        distanceElement.style.color = "#100c08";
+                        distanceElement.style.color = "#fafafa";
                         updateNavigationPanel();
                     }
                 }
@@ -894,6 +941,51 @@
             // Also update bottom bar
             document.getElementById('arrival-time').textContent = "Arrived";
             document.getElementById('remaining-stats').textContent = "Journey complete";
+        }
+
+        function checkIfOffRoute() {
+            if (!isNavigating || !currentRoute || !userLocation || isOffRoute) return;
+            
+            const routePath = currentRoute.routes[0].overview_path;
+            if (!routePath || routePath.length === 0) return;
+            
+            // Find minimum distance to the route path
+            let minDistanceToRoute = Infinity;
+            routePath.forEach(point => {
+                let lat, lng;
+                if (typeof point.lat === 'function') {
+                    lat = point.lat();
+                    lng = point.lng();
+                } else {
+                    lat = point.lat;
+                    lng = point.lng;
+                }
+                
+                const distance = calculateDistance(
+                    userLocation.lat, userLocation.lng,
+                    lat, lng
+                );
+                
+                minDistanceToRoute = Math.min(minDistanceToRoute, distance);
+            });
+            
+            // Faster rerouting - if user is more than 75 meters from the route, trigger reroute
+            if (minDistanceToRoute > 0.075) { // 75 meters (reduced from 100m)
+                console.log(`🔄 Off route by ${(minDistanceToRoute * 1000).toFixed(0)}m - rerouting...`);
+                isOffRoute = true;
+                
+                // Show rerouting message in new black format
+                const distanceElement = document.getElementById('distance-large');
+                const streetElement = document.getElementById('street-name');
+                if (distanceElement && streetElement) {
+                    distanceElement.textContent = "Rerouting";
+                    streetElement.textContent = "Finding new route...";
+                    distanceElement.style.color = "#FF9500"; // Orange for rerouting
+                }
+                
+                // Request new route immediately
+                requestReroute();
+            }
         }
 
         function stopNavigation() {
