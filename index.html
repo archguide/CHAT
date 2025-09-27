@@ -287,11 +287,10 @@
                 userLocation = null;
             }
 
-            // Initialize map
-            const mapCenter = userLocation || { lat: 34.0522, lng: -118.2437 };
+            // Initialize map without default user location
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 14,
-                center: mapCenter,
+                zoom: 10, // Start zoomed out
+                center: { lat: 34.0522, lng: -118.2437 }, // Just for initial map center, no marker
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
@@ -318,11 +317,10 @@
             });
             directionsRenderer.setMap(map);
 
-            // Add markers when user location is available
-            if (userLocation) {
-                updateUserMarkerSmooth();
-            }
+            // Add destination marker only
             addDestinationMarker();
+            
+            // Don't add user marker until location is detected
             
             // Start location tracking
             startLocationTracking();
@@ -416,6 +414,7 @@
                         // Center map on first location detection
                         if (wasFirstLocation) {
                             map.setCenter(userLocation);
+                            map.setZoom(14); // Zoom in to normal level
                             console.log("📍 First location detected, centering map");
                         }
                         
@@ -547,8 +546,8 @@
             navPanel.innerHTML = `
                 <div id="current-nav-content">
                     <div id="direction-icon">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M7 14l5-5 5 5z"/>
+                        <svg viewBox="0 0 24 24" stroke="#fafafa" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>
                         </svg>
                     </div>
                     <div id="instruction-content">
@@ -674,17 +673,34 @@
             let iconPath = '';
             
             if (instruction.toLowerCase().includes('left')) {
-                // Simple left arrow
-                iconPath = '<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>';
+                // Consistent left arrow - line with arrowhead
+                iconPath = '<path d="M15 6 L9 12 L15 18 M9 12 L21 12"/>';
             } else if (instruction.toLowerCase().includes('right')) {
-                // Simple right arrow  
-                iconPath = '<path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/>';
+                // Consistent right arrow - line with arrowhead
+                iconPath = '<path d="M9 18 L15 12 L9 6 M15 12 L3 12"/>';
             } else {
-                // Simple up arrow for straight/continue
-                iconPath = '<path d="M7 14l5-5 5 5z"/>';
+                // Consistent up arrow - line with arrowhead
+                iconPath = '<path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>';
             }
             
             svg.innerHTML = iconPath;
+        }
+
+        function getDirectionIcon(instruction) {
+            let iconPath = '';
+            
+            if (instruction.toLowerCase().includes('left')) {
+                // Consistent left arrow - line with arrowhead
+                iconPath = '<path d="M15 6 L9 12 L15 18 M9 12 L21 12"/>';
+            } else if (instruction.toLowerCase().includes('right')) {
+                // Consistent right arrow - line with arrowhead  
+                iconPath = '<path d="M9 18 L15 12 L9 6 M15 12 L3 12"/>';
+            } else {
+                // Consistent up arrow - line with arrowhead
+                iconPath = '<path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>';
+            }
+            
+            return iconPath;
         }
 
         function updateAllDirections() {
@@ -701,8 +717,15 @@
                 const instruction = step.instructions.replace(/<[^>]*>/g, '');
                 const cleanStreetName = extractCleanStreetName(instruction);
                 
+                // Get the appropriate direction icon
+                const iconPath = getDirectionIcon(instruction);
+                
                 stepDiv.innerHTML = `
-                    <div class="step-number ${index === currentStepIndex ? 'current' : ''}">${index + 1}</div>
+                    <div class="step-icon">
+                        <svg viewBox="0 0 24 24" stroke="#100c08" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            ${iconPath}
+                        </svg>
+                    </div>
                     <div class="step-text">${cleanStreetName}</div>
                     <div class="step-distance">${step.distance.text}</div>
                 `;
