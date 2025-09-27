@@ -30,6 +30,7 @@
             font-family: 'Gothic A1', sans-serif;
             text-align: center;
             box-shadow: 0 4px 20px rgba(4, 99, 7, 0.3);
+            min-width: 160px;
         }
         #start-nav-button:hover { 
             background: #035206;
@@ -253,7 +254,7 @@
     </style>
 </head>
 <body>
-    <button id="start-nav-button" onclick="forceCreateRoute()">Start Navigation</button>
+    <button id="start-nav-button" onclick="forceCreateRoute()">Waiting for GPS...</button>
 
     <div id="map"></div>
 
@@ -287,10 +288,10 @@
                 userLocation = null;
             }
 
-            // Initialize map without default user location
+            // Initialize map without any default center - let it float until location is found
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 10, // Start zoomed out
-                center: { lat: 34.0522, lng: -118.2437 }, // Just for initial map center, no marker
+                zoom: 2, // Start very zoomed out
+                center: { lat: 0, lng: 0 }, // Neutral center until location found
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
@@ -317,10 +318,8 @@
             });
             directionsRenderer.setMap(map);
 
-            // Add destination marker only
-            addDestinationMarker();
-            
-            // Don't add user marker until location is detected
+            // Don't add destination marker until we have user location
+            // addDestinationMarker(); - this will be called when first location is detected
             
             // Start location tracking
             startLocationTracking();
@@ -361,8 +360,8 @@
                     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
                         <svg width="24" height="30" viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg">
                             <ellipse cx="12" cy="28" rx="6" ry="1.5" fill="rgba(0,0,0,0.2)"/>
-                            <path d="M12 0C5.4 0 0 5.4 0 12c0 6.6 12 18 12 18s12-11.4 12-18C24 5.4 18.6 0 12 0z" fill="#0f52ba"/>
-                            <circle cx="12" cy="12" r="7" fill="white"/>
+                            <path d="M12 0C5.4 0 0 5.4 0 12c0 6.6 12 18 12 18s12-11.4 12-18C24 5.4 18.6 0 12 0z" fill="#EA4335"/>
+                            <circle cx="12" cy="12" r="4" fill="white"/>
                         </svg>
                     `),
                     scaledSize: new google.maps.Size(24, 30),
@@ -415,7 +414,18 @@
                         if (wasFirstLocation) {
                             map.setCenter(userLocation);
                             map.setZoom(14); // Zoom in to normal level
-                            console.log("📍 First location detected, centering map");
+                            console.log("📍 First location detected, centering map and adding destination");
+                            
+                            // Update button text now that we have location
+                            const button = document.getElementById('start-nav-button');
+                            if (button && button.textContent === 'Waiting for GPS...') {
+                                button.textContent = 'Start Navigation';
+                            }
+                            
+                            // Now add destination marker since we have a real location context
+                            if (!destinationMarker) {
+                                addDestinationMarker();
+                            }
                         }
                         
                         if (isNavigating) {
@@ -447,7 +457,7 @@
             // Don't create route if no user location detected
             if (!userLocation) {
                 const button = document.getElementById('start-nav-button');
-                button.textContent = "Waiting for location...";
+                button.textContent = "Waiting for GPS location...";
                 button.disabled = true;
                 
                 // Wait for location and retry
@@ -457,15 +467,17 @@
                     } else {
                         button.textContent = "Start Navigation";
                         button.disabled = false;
-                        alert("Please enable location services to start navigation");
+                        alert("Please enable location services and wait for GPS to start navigation");
                     }
-                }, 2000);
+                }, 3000);
                 return;
             }
             
             const button = document.getElementById('start-nav-button');
             button.textContent = "Creating route...";
             button.disabled = true;
+            
+            console.log(`🗺️ Creating route from actual GPS location: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`);
             
             const request = {
                 origin: userLocation,
@@ -722,7 +734,7 @@
                 
                 stepDiv.innerHTML = `
                     <div class="step-icon">
-                        <svg viewBox="0 0 24 24" stroke="#100c08" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <svg viewBox="0 0 24 24">
                             ${iconPath}
                         </svg>
                     </div>
