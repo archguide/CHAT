@@ -30,7 +30,6 @@
             font-family: 'Gothic A1', sans-serif;
             text-align: center;
             box-shadow: 0 4px 20px rgba(4, 99, 7, 0.3);
-            min-width: 160px;
         }
         #start-nav-button:hover { 
             background: #035206;
@@ -254,7 +253,7 @@
     </style>
 </head>
 <body>
-    <button id="start-nav-button" onclick="forceCreateRoute()">Waiting for GPS...</button>
+    <button id="start-nav-button" onclick="forceCreateRoute()">Start Navigation</button>
 
     <div id="map"></div>
 
@@ -284,14 +283,13 @@
             if (!isNaN(lat) && !isNaN(lng)) {
                 userLocation = { lat: lat, lng: lng };
             } else {
-                // No default location - let user location tracking set it
-                userLocation = null;
+                userLocation = { lat: 34.0522, lng: -118.2437 }; // Default LA
             }
 
-            // Initialize map without any default center - let it float until location is found
+            // Initialize map
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 2, // Start very zoomed out
-                center: { lat: 0, lng: 0 }, // Neutral center until location found
+                zoom: 14,
+                center: userLocation,
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
@@ -318,8 +316,9 @@
             });
             directionsRenderer.setMap(map);
 
-            // Don't add destination marker until we have user location
-            // addDestinationMarker(); - this will be called when first location is detected
+            // Add markers
+            updateUserMarkerSmooth();
+            addDestinationMarker();
             
             // Start location tracking
             startLocationTracking();
@@ -414,18 +413,7 @@
                         if (wasFirstLocation) {
                             map.setCenter(userLocation);
                             map.setZoom(14); // Zoom in to normal level
-                            console.log("📍 First location detected, centering map and adding destination");
-                            
-                            // Update button text now that we have location
-                            const button = document.getElementById('start-nav-button');
-                            if (button && button.textContent === 'Waiting for GPS...') {
-                                button.textContent = 'Start Navigation';
-                            }
-                            
-                            // Now add destination marker since we have a real location context
-                            if (!destinationMarker) {
-                                addDestinationMarker();
-                            }
+                            console.log("📍 First location detected, centering map");
                         }
                         
                         if (isNavigating) {
@@ -454,30 +442,9 @@
         }
 
         function forceCreateRoute() {
-            // Don't create route if no user location detected
-            if (!userLocation) {
-                const button = document.getElementById('start-nav-button');
-                button.textContent = "Waiting for GPS location...";
-                button.disabled = true;
-                
-                // Wait for location and retry
-                setTimeout(() => {
-                    if (userLocation) {
-                        forceCreateRoute();
-                    } else {
-                        button.textContent = "Start Navigation";
-                        button.disabled = false;
-                        alert("Please enable location services and wait for GPS to start navigation");
-                    }
-                }, 3000);
-                return;
-            }
-            
             const button = document.getElementById('start-nav-button');
             button.textContent = "Creating route...";
             button.disabled = true;
-            
-            console.log(`🗺️ Creating route from actual GPS location: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`);
             
             const request = {
                 origin: userLocation,
@@ -559,7 +526,7 @@
                 <div id="current-nav-content">
                     <div id="direction-icon">
                         <svg viewBox="0 0 24 24" stroke="#fafafa" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>
+                            <polyline points="18,15 12,9 6,15"/><line x1="12" y1="9" x2="12" y2="21"/>
                         </svg>
                     </div>
                     <div id="instruction-content">
@@ -685,14 +652,14 @@
             let iconPath = '';
             
             if (instruction.toLowerCase().includes('left')) {
-                // Consistent left arrow - line with arrowhead
-                iconPath = '<path d="M15 6 L9 12 L15 18 M9 12 L21 12"/>';
+                // Pure line left arrow
+                iconPath = '<polyline points="15,6 9,12 15,18"/><line x1="9" y1="12" x2="21" y2="12"/>';
             } else if (instruction.toLowerCase().includes('right')) {
-                // Consistent right arrow - line with arrowhead
-                iconPath = '<path d="M9 18 L15 12 L9 6 M15 12 L3 12"/>';
+                // Pure line right arrow
+                iconPath = '<polyline points="9,18 15,12 9,6"/><line x1="15" y1="12" x2="3" y2="12"/>';
             } else {
-                // Consistent up arrow - line with arrowhead
-                iconPath = '<path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>';
+                // Pure line up arrow
+                iconPath = '<polyline points="18,15 12,9 6,15"/><line x1="12" y1="9" x2="12" y2="21"/>';
             }
             
             svg.innerHTML = iconPath;
@@ -702,14 +669,14 @@
             let iconPath = '';
             
             if (instruction.toLowerCase().includes('left')) {
-                // Consistent left arrow - line with arrowhead
-                iconPath = '<path d="M15 6 L9 12 L15 18 M9 12 L21 12"/>';
+                // Pure line left arrow
+                iconPath = '<polyline points="15,6 9,12 15,18"/><line x1="9" y1="12" x2="21" y2="12"/>';
             } else if (instruction.toLowerCase().includes('right')) {
-                // Consistent right arrow - line with arrowhead  
-                iconPath = '<path d="M9 18 L15 12 L9 6 M15 12 L3 12"/>';
+                // Pure line right arrow
+                iconPath = '<polyline points="9,18 15,12 9,6"/><line x1="15" y1="12" x2="3" y2="12"/>';
             } else {
-                // Consistent up arrow - line with arrowhead
-                iconPath = '<path d="M18 15 L12 9 L6 15 M12 9 L12 21"/>';
+                // Pure line up arrow
+                iconPath = '<polyline points="18,15 12,9 6,15"/><line x1="12" y1="9" x2="12" y2="21"/>';
             }
             
             return iconPath;
