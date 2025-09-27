@@ -283,13 +283,15 @@
             if (!isNaN(lat) && !isNaN(lng)) {
                 userLocation = { lat: lat, lng: lng };
             } else {
-                userLocation = { lat: 34.0522, lng: -118.2437 }; // Default LA
+                // No default location - let user location tracking set it
+                userLocation = null;
             }
 
             // Initialize map
+            const mapCenter = userLocation || { lat: 34.0522, lng: -118.2437 };
             map = new google.maps.Map(document.getElementById("map"), {
                 zoom: 14,
-                center: userLocation,
+                center: mapCenter,
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
@@ -316,8 +318,10 @@
             });
             directionsRenderer.setMap(map);
 
-            // Add markers
-            updateUserMarkerSmooth();
+            // Add markers when user location is available
+            if (userLocation) {
+                updateUserMarkerSmooth();
+            }
             addDestinationMarker();
             
             // Start location tracking
@@ -404,9 +408,16 @@
                     if (!userLocation || newLocation.accuracy < 15 || 
                         calculateDistance(userLocation.lat, userLocation.lng, newLocation.lat, newLocation.lng) > 0.003) {
                         
+                        const wasFirstLocation = !userLocation;
                         userLocation = newLocation;
                         updateUserMarkerSmooth();
                         lastLocationUpdate = Date.now();
+                        
+                        // Center map on first location detection
+                        if (wasFirstLocation) {
+                            map.setCenter(userLocation);
+                            console.log("📍 First location detected, centering map");
+                        }
                         
                         if (isNavigating) {
                             // Smooth pan to location without jarring jumps
@@ -434,6 +445,25 @@
         }
 
         function forceCreateRoute() {
+            // Don't create route if no user location detected
+            if (!userLocation) {
+                const button = document.getElementById('start-nav-button');
+                button.textContent = "Waiting for location...";
+                button.disabled = true;
+                
+                // Wait for location and retry
+                setTimeout(() => {
+                    if (userLocation) {
+                        forceCreateRoute();
+                    } else {
+                        button.textContent = "Start Navigation";
+                        button.disabled = false;
+                        alert("Please enable location services to start navigation");
+                    }
+                }, 2000);
+                return;
+            }
+            
             const button = document.getElementById('start-nav-button');
             button.textContent = "Creating route...";
             button.disabled = true;
@@ -572,6 +602,9 @@
             
             const currentStep = routeSteps[currentStepIndex];
             
+            // Debug logging to track step changes
+            console.log(`📍 Displaying step ${currentStepIndex + 1}/${routeSteps.length}`);
+            
             // Update distance in large format
             updateDistanceCountdown();
             
@@ -664,11 +697,13 @@
                 const stepDiv = document.createElement('div');
                 stepDiv.className = `direction-step ${index === currentStepIndex ? 'current' : ''}`;
                 
+                // Clean the instruction text the same way as the main display
                 const instruction = step.instructions.replace(/<[^>]*>/g, '');
+                const cleanStreetName = extractCleanStreetName(instruction);
                 
                 stepDiv.innerHTML = `
                     <div class="step-number ${index === currentStepIndex ? 'current' : ''}">${index + 1}</div>
-                    <div class="step-text">${instruction}</div>
+                    <div class="step-text">${cleanStreetName}</div>
                     <div class="step-distance">${step.distance.text}</div>
                 `;
                 
@@ -798,8 +833,8 @@
                 origin: userLocation,
                 destination: { lat: destination.lat, lng: destination.lng },
                 travelMode: google.maps.TravelMode.DRIVING,
-                avoidHighways: false, // Allow all route types for faster calculation
-                optimizeWaypoints: false // Disable optimization for speed
+                avoidHighways: false,
+                optimizeWaypoints: false
             };
             
             directionsService.route(request, (result, status) => {
@@ -808,7 +843,7 @@
                     routeSteps = result.routes[0].legs[0].steps;
                     directionsRenderer.setDirections(result);
                     
-                    // Reset to first step of new route
+                    // Reset to first step of new route - CRITICAL: Prevent backwards movement
                     currentStepIndex = 0;
                     isOffRoute = false;
                     
@@ -816,11 +851,13 @@
                     updateNavigationPanel();
                     updateBottomBar();
                     
-                    // IMPORTANT: Zoom back in to navigation level
-                    if (userLocation) {
-                        map.setCenter(userLocation);
-                        map.setZoom(18); // Back to navigation zoom level
-                    }
+                    // FIXED: Proper zoom restoration after rerouting
+                    setTimeout(() => {
+                        if (userLocation && map) {
+                            map.setCenter(userLocation);
+                            map.setZoom(18); // Force back to navigation zoom
+                        }
+                    }, 100); // Small delay to ensure route is rendered first
                     
                     // Reset colors
                     const distanceElement = document.getElementById('distance-large');
@@ -828,7 +865,7 @@
                         distanceElement.style.color = "#fafafa";
                     }
                     
-                    console.log("✅ Reroute successful");
+                    console.log("✅ Reroute successful - zoom restored to level 18");
                 } else {
                     console.log("❌ Reroute failed, continuing with original route");
                     isOffRoute = false;
@@ -866,54 +903,30 @@
                 stepEndLat, stepEndLng
             );
             
-            // More aggressive turn detection - larger threshold for better detection
-            // Also check if we're moving away from the current waypoint (past it)
-            let shouldAdvance = false;
-            
-            if (distanceToTurn < 0.025) { // 25 meters - more forgiving
-                shouldAdvance = true;
-            } else if (currentStepIndex + 1 < routeSteps.length) {
-                // Check if we're closer to the NEXT waypoint than current one
-                const nextStep = routeSteps[currentStepIndex + 1];
-                const nextStepEnd = nextStep.end_location;
+            // Much more conservative turn detection - only advance when very close
+            // This prevents advancing too early and getting stuck
+            if (distanceToTurn < 0.015) { // Only 15 meters - much more conservative
+                console.log(`🎯 Turn completed! Distance: ${(distanceToTurn * 1000).toFixed(1)}m`);
                 
-                let nextStepLat, nextStepLng;
-                if (typeof nextStepEnd.lat === 'function') {
-                    nextStepLat = nextStepEnd.lat();
-                    nextStepLng = nextStepEnd.lng();
-                } else {
-                    nextStepLat = nextStepEnd.lat;
-                    nextStepLng = nextStepEnd.lng;
-                }
-                
-                const distanceToNext = calculateDistance(
-                    userLocation.lat, userLocation.lng,
-                    nextStepLat, nextStepLng
-                );
-                
-                // If we're closer to next waypoint and reasonably close to current one, advance
-                if (distanceToNext < distanceToTurn && distanceToTurn < 0.1) { // 100 meters max
-                    shouldAdvance = true;
-                }
-            }
-            
-            if (shouldAdvance) {
-                console.log(`🎯 Advancing to step ${currentStepIndex + 2}/${routeSteps.length}`);
-                
-                // Advance immediately without delay or message
-                currentStepIndex++;
-                updateNavigationPanel();
-                updateBottomBar();
-                
-                // Check if arrived at destination
-                if (currentStepIndex >= routeSteps.length) {
-                    const destinationDistance = calculateDistance(
-                        userLocation.lat, userLocation.lng,
-                        destination.lat, destination.lng
-                    );
+                // CRITICAL: Prevent going backwards by ensuring we only advance
+                const newStepIndex = currentStepIndex + 1;
+                if (newStepIndex > currentStepIndex && newStepIndex <= routeSteps.length) {
+                    currentStepIndex = newStepIndex;
+                    updateNavigationPanel();
+                    updateBottomBar();
                     
-                    if (destinationDistance < 0.1) { // 100 meters
-                        setTimeout(showArrivalMessage, 500);
+                    console.log(`📍 Advanced to step ${currentStepIndex}/${routeSteps.length}`);
+                    
+                    // Check if arrived at destination
+                    if (currentStepIndex >= routeSteps.length) {
+                        const destinationDistance = calculateDistance(
+                            userLocation.lat, userLocation.lng,
+                            destination.lat, destination.lng
+                        );
+                        
+                        if (destinationDistance < 0.1) { // 100 meters
+                            setTimeout(showArrivalMessage, 500);
+                        }
                     }
                 }
             }
